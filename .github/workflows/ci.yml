@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend:
+    name: Backend CI (Pytest & Schema Sync)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r flowinbox/backend/requirements.txt
+
+      - name: Run Pytest suite
+        working-directory: flowinbox/backend
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m pytest tests/
+
+  frontend:
+    name: Frontend CI (Build Verification)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        working-directory: flowinbox/frontend
+        run: npm install
+
+      - name: Build frontend static assets
+        working-directory: flowinbox/frontend
+        run: npm run build

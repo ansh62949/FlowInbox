@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700&display=swap');
+@import './styles/tokens.css';
+@import './styles/animations.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background-color: var(--fi-page-bg);
+  color: var(--fi-text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
+
+::selection { background: #cfe5f8; color: #172335; }
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Theme Dynamic CSS Class Overrides */
+html.theme-dark body,
+html.theme-slate body {
+  background-color: var(--fi-page-bg) !important;
+  color: var(--fi-text-primary) !important;
+}
+
+html.theme-dark aside, html.theme-slate aside,
+html.theme-dark nav, html.theme-slate nav,
+html.theme-dark main, html.theme-slate main {
+  background-color: var(--fi-sidebar-bg) !important;
+  color: var(--fi-text-primary) !important;
+  border-color: var(--fi-border-default) !important;
+}
+
+html.theme-dark .bg-white, html.theme-slate .bg-white,
+html.theme-dark .bg-white\/80, html.theme-slate .bg-white\/80,
+html.theme-dark .bg-white\/60, html.theme-slate .bg-white\/60,
+html.theme-dark .bg-white\/40, html.theme-slate .bg-white\/40,
+html.theme-dark .bg-\[\#F0F5FA\], html.theme-slate .bg-\[\#F0F5FA\],
+html.theme-dark .bg-\[\#F7FAFD\], html.theme-slate .bg-\[\#F7FAFD\],
+html.theme-dark .bg-\[\#f4f8fc\], html.theme-slate .bg-\[\#f4f8fc\],
+html.theme-dark .bg-\[\#f8fbfe\], html.theme-slate .bg-\[\#f8fbfe\] {
+  background-color: var(--fi-surface-card) !important;
+  color: var(--fi-text-primary) !important;
+}
+
+html.theme-dark .bg-\[\#eaf3fb\], html.theme-slate .bg-\[\#eaf3fb\],
+html.theme-dark .bg-\[\#EBF2FA\], html.theme-slate .bg-\[\#EBF2FA\],
+html.theme-dark .bg-\[\#FAF6F0\], html.theme-slate .bg-\[\#FAF6F0\] {
+  background-color: var(--fi-page-bg) !important;
+  color: var(--fi-text-primary) !important;
+}
+
+html.theme-dark .text-\[\#172335\], html.theme-slate .text-\[\#172335\],
+html.theme-dark .text-\[\#172033\], html.theme-slate .text-\[\#172033\],
+html.theme-dark .text-\[\#172035\], html.theme-slate .text-\[\#172035\] {
+  color: var(--fi-text-primary) !important;
+}
+
+html.theme-dark .text-\[\#536176\], html.theme-slate .text-\[\#536176\],
+html.theme-dark .text-\[\#5e7186\], html.theme-slate .text-\[\#5e7186\],
+html.theme-dark .text-\[\#64788c\], html.theme-slate .text-\[\#64788c\] {
+  color: var(--fi-text-secondary) !important;
+}
+
+html.theme-dark .border-\[\#d7e3ee\], html.theme-slate .border-\[\#d7e3ee\],
+html.theme-dark .border-\[\#DCE5EF\], html.theme-slate .border-\[\#DCE5EF\],
+html.theme-dark .border-\[\#E6DFD5\], html.theme-slate .border-\[\#E6DFD5\],
+html.theme-dark .border-\[\#E9EFF5\], html.theme-slate .border-\[\#E9EFF5\] {
+  border-color: var(--fi-border-default) !important;
+}

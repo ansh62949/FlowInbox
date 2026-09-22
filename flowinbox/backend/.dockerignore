@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+!.env.production.example
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.venv
+venv
+flowinbox.db
+*.db
+tests/
+Dockerfile

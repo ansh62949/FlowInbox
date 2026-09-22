@@ -1,0 +1,96 @@
+:root, .theme-cream {
+  /* Warm Cream & Blue FlowInbox Design Tokens */
+  --fi-page-bg: #FAF6F0;
+  --fi-sidebar-bg: #eaf3fb;
+  --fi-rail-bg: #FAF6F0;
+  --fi-surface-card: #FFFFFF;
+  --fi-surface-soft: #F8F4EE;
+  --fi-surface-hover: #EFE8DC;
+  --fi-surface-active: #E4DCCF;
+
+  --fi-blue: #2d7ed0;
+  --fi-blue-dark: #1d5f9f;
+  --fi-blue-soft: #e5f0fb;
+  --fi-blue-border: #c9dff4;
+
+  --fi-text-primary: #172335;
+  --fi-text-secondary: #5e7186;
+  --fi-text-muted: #8fa0b1;
+
+  --fi-border-default: #d7e3ee;
+  --fi-border-light: #F0E9DF;
+
+  --fi-green: #48A97B;
+  --fi-yellow: #E5A93A;
+  --fi-red: #D95D5D;
+  --fi-purple: #8C6BD9;
+  --fi-pink: #D77BB5;
+
+  --fi-gradient-hero: linear-gradient(135deg, #FAF6F0 0%, #F5EBE1 45%, #EBF2FA 100%);
+  --fi-gradient-cream: linear-gradient(120deg, #FAF6F0 0%, #F2E8DA 50%, #E5F0FA 100%);
+  --fi-gradient-purple: linear-gradient(135deg, #9b51e0 0%, #2d7ed0 100%);
+}
+
+.theme-dark {
+  --fi-page-bg: #0F172A;
+  --fi-sidebar-bg: #1E293B;
+  --fi-rail-bg: #0F172A;
+  --fi-surface-card: #1E293B;
+  --fi-surface-soft: #334155;
+  --fi-surface-hover: #475569;
+  --fi-surface-active: #64748B;
+
+  --fi-blue: #38BDF8;
+  --fi-blue-dark: #0284C7;
+  --fi-blue-soft: #0C4A6E;
+  --fi-blue-border: #0284C7;
+
+  --fi-text-primary: #F8FAFC;
+  --fi-text-secondary: #94A3B8;
+  --fi-text-muted: #64748B;
+
+  --fi-border-default: #334155;
+  --fi-border-light: #1E293B;
+
+  --fi-green: #34D399;
+  --fi-yellow: #FBBF24;
+  --fi-red: #F87171;
+  --fi-purple: #A78BFA;
+  --fi-pink: #F472B6;
+
+  --fi-gradient-hero: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%);
+  --fi-gradient-cream: linear-gradient(120deg, #1E293B 0%, #0F172A 100%);
+  --fi-gradient-purple: linear-gradient(135deg, #8B5CF6 0%, #38BDF8 100%);
+}
+
+.theme-slate {
+  --fi-page-bg: #111827;
+  --fi-sidebar-bg: #1F2937;
+  --fi-rail-bg: #111827;
+  --fi-surface-card: #1F2937;
+  --fi-surface-soft: #374151;
+  --fi-surface-hover: #4B5563;
+  --fi-surface-active: #6B7280;
+
+  --fi-blue: #6366F1;
+  --fi-blue-dark: #4338CA;
+  --fi-blue-soft: #312E81;
+  --fi-blue-border: #4F46E5;
+
+  --fi-text-primary: #F9FAFB;
+  --fi-text-secondary: #9CA3AF;
+  --fi-text-muted: #6B7280;
+
+  --fi-border-default: #374151;
+  --fi-border-light: #1F2937;
+
+  --fi-green: #10B981;
+  --fi-yellow: #F59E0B;
+  --fi-red: #EF4444;
+  --fi-purple: #8B5CF6;
+  --fi-pink: #EC4899;
+
+  --fi-gradient-hero: linear-gradient(135deg, #111827 0%, #1F2937 50%, #111827 100%);
+  --fi-gradient-cream: linear-gradient(120deg, #1F2937 0%, #111827 100%);
+  --fi-gradient-purple: linear-gradient(135deg, #6366F1 0%, #A855F7 100%);
+}
