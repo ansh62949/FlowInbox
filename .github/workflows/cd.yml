@@ -1,12 +1,12 @@
-name: CD - Container Build & Push
+name: CD (Continuous Deployment)
 
 on:
   push:
     branches: [ main ]
 
 jobs:
-  build-and-push:
-    name: Build & Push to GHCR
+  build-and-push-containers:
+    name: Build & Push Docker Images to GHCR
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -15,6 +15,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Log in to GitHub Container Registry (GHCR)
         uses: docker/login-action@v3
         with:
@@ -22,7 +25,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set Short Git SHA & Owner Name
+      - name: Set Short Git SHA & Lowercase Owner
         id: vars
         run: |
           echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
@@ -37,6 +40,8 @@ jobs:
           tags: |
             ghcr.io/${{ steps.vars.outputs.owner_lc }}/flowinbox-backend:${{ steps.vars.outputs.sha_short }}
             ghcr.io/${{ steps.vars.outputs.owner_lc }}/flowinbox-backend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build & Push Frontend Image
         uses: docker/build-push-action@v5
@@ -47,3 +52,16 @@ jobs:
           tags: |
             ghcr.io/${{ steps.vars.outputs.owner_lc }}/flowinbox-frontend:${{ steps.vars.outputs.sha_short }}
             ghcr.io/${{ steps.vars.outputs.owner_lc }}/flowinbox-frontend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trigger Render Backend Deployment Webhook (Optional)
+        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+      - name: Trigger Vercel Frontend Deployment Webhook (Optional)
+        if: ${{ secrets.VERCEL_DEPLOY_HOOK_URL != '' }}
+        run: |
+          curl -X POST "${{ secrets.VERCEL_DEPLOY_HOOK_URL }}"
+

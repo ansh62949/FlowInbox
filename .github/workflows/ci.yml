@@ -1,4 +1,4 @@
-name: CI
+name: CI (Continuous Integration)
 
 on:
   push:
@@ -7,8 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  backend:
-    name: Backend CI (Pytest & Schema Sync)
+  backend-test:
+    name: Backend Pytest & Schema Verification
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -18,21 +18,23 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'flowinbox/backend/requirements.txt'
 
-      - name: Install dependencies
+      - name: Install Backend Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r flowinbox/backend/requirements.txt
 
-      - name: Run Pytest suite
+      - name: Run Pytest Test Suite
         working-directory: flowinbox/backend
         env:
           PYTHONPATH: .
         run: |
           python -m pytest tests/
 
-  frontend:
-    name: Frontend CI (Build Verification)
+  frontend-build:
+    name: Frontend Vite Build Verification
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -42,11 +44,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'flowinbox/frontend/package-lock.json'
 
-      - name: Install dependencies
+      - name: Install Frontend Dependencies
         working-directory: flowinbox/frontend
         run: npm install
 
-      - name: Build frontend static assets
+      - name: Build Frontend Production Assets
         working-directory: flowinbox/frontend
         run: npm run build
+
