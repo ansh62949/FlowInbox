@@ -1,3 +1,4 @@
+import logging
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,7 @@ from app.integrations.oauth.google import GoogleOAuthService
 from app.core.security import create_access_token, encrypt_token, get_optional_current_user, get_current_user
 from app.integrations.gmail.sync import GmailSyncService
 
+logger = logging.getLogger("flowinbox.auth")
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
@@ -138,7 +140,7 @@ async def _process_oauth_callback(code: str, db: AsyncSession):
     try:
         await GmailSyncService.sync_user_inbox(db, user.id, access_token)
     except Exception as err:
-        print("[OAuthCallback] Inbox sync error:", err)
+        logger.warning(f"[OAuthCallback] Inbox sync error: {str(err)}")
 
     # Issue JWT token
     jwt_token = create_access_token(user.id)
@@ -240,7 +242,7 @@ async def google_callback_get(code: str, state: str = None, db: AsyncSession = D
         )
         return response
     except Exception as err:
-        print("[GoogleCallback] Error during callback handling:", err)
+        logger.warning(f"[GoogleCallback] Error during callback handling: {str(err)}")
         return RedirectResponse(
             url=f"{settings.FRONTEND_URL.rstrip('/')}/onboarding?error=oauth_failed",
             status_code=status.HTTP_307_TEMPORARY_REDIRECT

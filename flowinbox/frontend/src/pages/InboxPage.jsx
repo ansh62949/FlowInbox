@@ -1,22 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   Star, 
   Search,
   Sparkles,
   RotateCw,
-  X
+  X,
+  Calendar as CalendarIcon,
+  Users,
+  Clock
 } from 'lucide-react';
 import inboxApi from '../api/inbox';
+import calendarApi from '../api/calendar';
 
 export default function InboxPage() {
   const navigate = useNavigate();
   const { category: filterCategory } = useParams();
 
   const [threads, setThreads] = useState([]);
+  const [calendarEvents, setCalendarEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('primary');
   const [showNotificationBanner, setShowNotificationBanner] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const pollCountRef = useRef(0);
 
   const isFolderView = ['starred', 'sent', 'drafts', 'snoozed', 'trash', 'spam', 'all'].includes(filterCategory);
 
@@ -32,17 +39,32 @@ export default function InboxPage() {
 
   useEffect(() => {
     if (filterCategory) {
-      if (['primary', 'needs-reply', 'follow-ups', 'promotions', 'social', 'noise'].includes(filterCategory)) {
+      if (['primary', 'needs-reply', 'follow-ups', 'calendar', 'promotions', 'social', 'noise'].includes(filterCategory)) {
         setActiveTab(filterCategory);
       }
     }
   }, [filterCategory]);
 
-  const [isSyncing, setIsSyncing] = useState(false);
+  useEffect(() => {
+    if (activeTab === 'calendar' || filterCategory === 'calendar') {
+      calendarApi.getEvents()
+        .then((res) => setCalendarEvents(Array.isArray(res) ? res : []))
+        .catch((err) => console.warn('Failed to load calendar events:', err));
+    }
+  }, [activeTab, filterCategory]);
 
   useEffect(() => {
     loadThreads(true);
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
+      pollCountRef.current += 1;
+      // Every 5th poll (~40s), trigger background sync from Gmail API
+      if (pollCountRef.current % 5 === 0) {
+        try {
+          await inboxApi.syncInbox();
+        } catch (e) {
+          console.warn('[InboxPage] Periodic background sync fallback:', e);
+        }
+      }
       loadThreads(false);
     }, 8000);
     return () => clearInterval(interval);
@@ -53,7 +75,7 @@ export default function InboxPage() {
     try {
       let params = {};
       const knownFolders = ['starred', 'sent', 'drafts', 'snoozed', 'trash', 'spam', 'all', 'inbox'];
-      const knownCategories = ['primary', 'needs-reply', 'follow-ups', 'promotions', 'social', 'noise'];
+      const knownCategories = ['primary', 'needs-reply', 'follow-ups', 'calendar', 'promotions', 'social', 'noise'];
 
       if (filterCategory && knownFolders.includes(filterCategory)) {
         params.folder = filterCategory;
@@ -64,16 +86,24 @@ export default function InboxPage() {
         params.category = 'needs-reply';
       } else if (activeTab === 'follow-ups') {
         params.category = 'follow-ups';
+      } else if (activeTab === 'calendar') {
+        params.folder = 'all';
       } else if (activeTab && knownCategories.includes(activeTab)) {
         params.category = activeTab;
       }
 
       const data = await inboxApi.getThreads(params);
-      if (Array.isArray(data)) {
-        setThreads(data);
-      } else {
-        setThreads([]);
+      let list = Array.isArray(data) ? data : [];
+
+      if (activeTab === 'calendar' || filterCategory === 'calendar') {
+        const keywords = ['interview', 'meeting', 'calendar', 'schedule', 'call', 'google meet', 'zoom', 'invitation', 'event', 'sync'];
+        list = list.filter((t) => {
+          const text = `${t.subject || ''} ${t.snippet || ''}`.toLowerCase();
+          return keywords.some((k) => text.includes(k));
+        });
       }
+
+      setThreads(list);
     } catch (err) {
       console.error('Failed to load threads:', err);
       if (showLoading) setThreads([]);
@@ -151,6 +181,7 @@ export default function InboxPage() {
               { id: 'primary', label: 'Primary', color: 'text-[#2d7ed0]' },
               { id: 'needs-reply', label: 'Needs Reply', icon: '⚡', color: 'text-[#48A97B]' },
               { id: 'follow-ups', label: 'Follow Ups', icon: '✨', color: 'text-[#8C6BD9]' },
+              { id: 'calendar', label: 'Calendar', icon: '📅', color: 'text-[#D97706]' },
               { id: 'promotions', label: 'Promotions', color: 'text-[#64788c]' },
               { id: 'social', label: 'Social', color: 'text-[#64788c]' },
               { id: 'noise', label: 'Noise', color: 'text-[#64788c]' }
@@ -180,6 +211,43 @@ export default function InboxPage() {
 
       {/* Email List Table Pane */}
       <div className="flex-1 overflow-y-auto divide-y divide-[#f0f5fa]">
+        {/* Calendar Strip (when Calendar tab is active) */}
+        {(activeTab === 'calendar' || filterCategory === 'calendar') && (
+          <div className="p-4 bg-gradient-to-r from-[#FFFBEB] via-[#FEF3C7] to-[#FFFBEB] border-b border-[#FCD34D] flex flex-col gap-2.5 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-[#92400E]">
+                <CalendarIcon className="w-4 h-4 text-[#D97706]" />
+                <span>Upcoming Google Calendar Events ({calendarEvents.length})</span>
+              </div>
+              <span className="text-[10px] text-[#B45309] font-bold px-2 py-0.5 bg-white/80 rounded-md border border-[#FCD34D]">
+                Synced with Workspace Calendar
+              </span>
+            </div>
+
+            {calendarEvents.length === 0 ? (
+              <p className="text-xs text-[#B45309]">No upcoming events scheduled for today.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-0.5">
+                {calendarEvents.map((evt) => (
+                  <div key={evt.id} className="p-2.5 bg-white border border-[#FCD34D]/60 rounded-xl flex flex-col gap-1 shadow-2xs">
+                    <div className="flex items-center justify-between text-xs font-bold text-[#172335]">
+                      <span className="truncate">{evt.title}</span>
+                      <span className="px-2 py-0.5 rounded-md bg-[#FEF3C7] text-[#D97706] text-[10px] font-bold shrink-0 ml-2">
+                        {new Date(evt.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    {evt.attendees && evt.attendees.length > 0 && (
+                      <div className="flex items-center gap-1 text-[10px] text-[#536176]">
+                        <Users className="w-3 h-3 text-[#8995A7] shrink-0" />
+                        <span className="truncate">{evt.attendees.join(', ')}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {loading ? (
           <div className="p-4 flex flex-col gap-3">
             {[...Array(6)].map((_, i) => (

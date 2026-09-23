@@ -1,13 +1,15 @@
 import uuid
+import secrets
+import hashlib
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from app.db.session import get_db
-from app.models.workspace import Workspace, WorkspaceMember, WorkspaceRole
+from app.models.workspace import Workspace, WorkspaceMember, WorkspaceInvitation, WorkspaceRole
 from app.models.user import User
 from app.core.security import get_current_user
 
@@ -40,6 +42,20 @@ class MemberSchema(BaseModel):
 class InviteMemberSchema(BaseModel):
     email: str
     role: str = "MEMBER"
+
+
+class AcceptInviteSchema(BaseModel):
+    token: str
+
+
+class InvitationSchema(BaseModel):
+    id: str
+    workspace_id: str
+    email: str
+    role: str
+    status: str
+    expires_at: datetime
+    invitation_token: Optional[str] = None
 
 
 class UpdateMemberRoleSchema(BaseModel):
@@ -83,9 +99,10 @@ async def list_workspaces(
 
     if not workspaces:
         # Auto-create default workspace for user
+        ws_slug = f"workspace-{str(current_user.id)[:8]}"
         ws = Workspace(
-            name="Default Workspace",
-            slug="default-workspace",
+            name=f"{current_user.full_name or 'Default'}'s Workspace",
+            slug=ws_slug,
             created_by=current_user.id
         )
         db.add(ws)
@@ -119,7 +136,7 @@ async def create_workspace(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    slug = body.slug or body.name.lower().replace(" ", "-")
+    slug = body.slug or f"{body.name.lower().replace(' ', '-')}-{secrets.token_hex(4)}"
 
     ws = Workspace(name=body.name, slug=slug, created_by=current_user.id)
     db.add(ws)
@@ -169,65 +186,103 @@ async def list_members(
     ]
 
 
-@router.post("/{workspace_id}/members", response_model=MemberSchema)
-async def invite_member(
+@router.post("/{workspace_id}/invitations", response_model=InvitationSchema)
+async def create_invitation(
     workspace_id: str,
     body: InviteMemberSchema,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """Create a tokenized workspace invitation."""
     ws = await get_workspace_for_member(workspace_id, current_user, db)
 
-    # Find or create user by email
-    user_stmt = select(User).where(User.email == body.email)
-    user_res = await db.execute(user_stmt)
-    target_user = user_res.scalar_one_or_none()
+    # Check caller role permission (OWNER or ADMIN)
+    mem_stmt = select(WorkspaceMember).where(
+        WorkspaceMember.workspace_id == ws.id,
+        WorkspaceMember.user_id == current_user.id
+    )
+    caller_mem = (await db.execute(mem_stmt)).scalar_one_or_none()
+    if not caller_mem or caller_mem.role not in ["OWNER", "ADMIN"]:
+        raise HTTPException(status_code=403, detail="Only workspace Owners and Admins can send invitations.")
 
-    if not target_user:
-        target_user = User(
-            id=uuid.uuid4(),
-            email=body.email,
-            full_name=body.email.split("@")[0].capitalize()
-        )
-        db.add(target_user)
-        await db.flush()
+    # Generate secure random token and SHA-256 hash
+    raw_token = f"inv_{secrets.token_urlsafe(32)}"
+    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+
+    inv = WorkspaceInvitation(
+        workspace_id=ws.id,
+        email=body.email.lower().strip(),
+        role=body.role.upper(),
+        token_hash=token_hash,
+        invited_by=current_user.id,
+        expires_at=expires_at
+    )
+    db.add(inv)
+    await db.commit()
+    await db.refresh(inv)
+
+    return {
+        "id": str(inv.id),
+        "workspace_id": str(inv.workspace_id),
+        "email": inv.email,
+        "role": inv.role,
+        "status": "pending",
+        "expires_at": inv.expires_at,
+        "invitation_token": raw_token
+    }
+
+
+@router.post("/invitations/accept", response_model=MemberSchema)
+async def accept_invitation(
+    body: AcceptInviteSchema,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Accept workspace invitation via token."""
+    token_hash = hashlib.sha256(body.token.encode("utf-8")).hexdigest()
+    stmt = select(WorkspaceInvitation).where(WorkspaceInvitation.token_hash == token_hash)
+    inv = (await db.execute(stmt)).scalar_one_or_none()
+
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invalid or expired invitation token.")
+
+    if inv.accepted_at:
+        raise HTTPException(status_code=400, detail="Invitation has already been accepted.")
+
+    if datetime.now(timezone.utc) > inv.expires_at.replace(tzinfo=timezone.utc if inv.expires_at.tzinfo is None else inv.expires_at.tzinfo):
+        raise HTTPException(status_code=400, detail="Invitation token has expired.")
+
+    # Mark accepted
+    inv.accepted_at = datetime.now(timezone.utc)
 
     # Check if already member
     existing_stmt = select(WorkspaceMember).where(
-        WorkspaceMember.workspace_id == ws.id,
-        WorkspaceMember.user_id == target_user.id
+        WorkspaceMember.workspace_id == inv.workspace_id,
+        WorkspaceMember.user_id == current_user.id
     )
-    existing_res = await db.execute(existing_stmt)
-    existing_member = existing_res.scalar_one_or_none()
-    if existing_member:
-        return {
-            "id": str(existing_member.id),
-            "workspace_id": str(existing_member.workspace_id),
-            "user_id": str(target_user.id),
-            "email": target_user.email,
-            "full_name": target_user.full_name,
-            "role": existing_member.role,
-            "joined_at": existing_member.joined_at
-        }
+    existing_mem = (await db.execute(existing_stmt)).scalar_one_or_none()
 
-    # Create workspace member
-    member = WorkspaceMember(
-        workspace_id=ws.id,
-        user_id=target_user.id,
-        role=body.role.upper()
-    )
-    db.add(member)
+    if not existing_mem:
+        existing_mem = WorkspaceMember(
+            workspace_id=inv.workspace_id,
+            user_id=current_user.id,
+            role=inv.role
+        )
+        db.add(existing_mem)
+
     await db.commit()
-    await db.refresh(member)
+    await db.refresh(existing_mem)
 
     return {
-        "id": str(member.id),
-        "workspace_id": str(member.workspace_id),
-        "user_id": str(target_user.id),
-        "email": target_user.email,
-        "full_name": target_user.full_name,
-        "role": member.role,
-        "joined_at": member.joined_at
+        "id": str(existing_mem.id),
+        "workspace_id": str(existing_mem.workspace_id),
+        "user_id": str(current_user.id),
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "role": existing_mem.role,
+        "joined_at": existing_mem.joined_at
     }
 
 

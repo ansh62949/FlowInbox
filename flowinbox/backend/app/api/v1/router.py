@@ -13,6 +13,7 @@ from app.api.v1.workspaces import router as workspaces_router
 from app.api.v1.persistent_agents import router as persistent_agents_router
 from app.api.v1.api_tokens import router as api_tokens_router
 from app.api.v1.agent_simulation import router as agent_simulation_router
+from app.api.v1.integrations import router as integrations_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
@@ -29,6 +30,7 @@ api_router.include_router(workspaces_router)
 api_router.include_router(persistent_agents_router)
 api_router.include_router(api_tokens_router)
 api_router.include_router(agent_simulation_router)
+api_router.include_router(integrations_router)
 
 
 

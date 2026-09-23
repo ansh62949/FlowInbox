@@ -23,32 +23,39 @@ class EmbeddingProvider(ABC):
 
 
 class FastEmbedProvider(EmbeddingProvider):
-    """FastEmbed implementation using BAAI/bge-small-en-v1.5 model."""
+    """FastEmbed implementation using BAAI/bge-small-en-v1.5 model with lazy initialization."""
 
     def __init__(self):
-        try:
-            from fastembed import TextEmbedding
-            self.model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
-            self._dim = 384
-        except Exception:
-            self.model = None
-            self._dim = 384
+        self._model = None
+        self._dim = 384
+
+    def _get_model(self):
+        if self._model is None:
+            try:
+                from fastembed import TextEmbedding
+                self._model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+            except Exception:
+                self._model = False
+        return self._model if self._model is not False else None
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         if not texts:
             return []
-        if self.model:
-            embeddings = list(self.model.embed(texts))
+        model = self._get_model()
+        if model:
+            embeddings = list(model.embed(texts))
             return [e.tolist() for e in embeddings]
         # Fallback pseudo-embeddings for testing without heavy model download
         return [[0.01 * (i + idx) for i in range(self._dim)] for idx, t in enumerate(texts)]
 
     def embed_query(self, text: str) -> List[float]:
-        if self.model:
-            embedding = list(self.model.embed([text]))[0]
+        model = self._get_model()
+        if model:
+            embedding = list(model.embed([text]))[0]
             return embedding.tolist()
         return [0.01 * i for i in range(self._dim)]
 
     @property
     def dimension(self) -> int:
         return self._dim
+

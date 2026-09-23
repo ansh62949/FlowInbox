@@ -1,12 +1,13 @@
+import logging
 import uuid
 from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.email import EmailThread, Email
 from app.integrations.gmail.client import GmailClient
-
-
 from datetime import datetime, timezone
+
+logger = logging.getLogger("flowinbox.integrations.gmail_sync")
 
 def _to_utc(dt):
     if not dt:
@@ -23,8 +24,8 @@ class GmailSyncService:
     async def sync_user_inbox(db: AsyncSession, user_id: uuid.UUID, access_token: str) -> int:
         client = GmailClient(access_token)
         
-        # Query multiple label searches to capture all user emails: inbox, starred, sent, drafts, unread
-        queries = [None, "is:starred", "is:sent", "is:draft", "is:unread"]
+        # Query across inbox categories (inbox, promotions, social, updates, sent, starred)
+        queries = ["in:inbox", "category:promotions", "category:social", "category:updates", "is:sent", "is:starred"]
         all_messages = []
         seen_ids = set()
 
@@ -36,7 +37,7 @@ class GmailSyncService:
                         seen_ids.add(m["gmail_id"])
                         all_messages.append(m)
             except Exception as err:
-                print(f"[GmailSync] Error fetching query '{q}':", err)
+                logger.warning(f"[GmailSync] Error fetching query '{q}': {str(err)}")
 
         synced_count = 0
 

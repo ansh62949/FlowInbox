@@ -95,7 +95,7 @@ export default function OnboardingPage() {
         return;
       }
     } catch (e) {
-      console.log('[Onboarding] Google status check error:', e);
+      console.warn('[Onboarding] Google status check warning:', e);
     }
     handleStartToneAnalysis();
   };

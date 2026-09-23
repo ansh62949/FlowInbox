@@ -17,11 +17,15 @@ class GeminiProvider(LLMProvider):
         mode_str = "MOCK" if self.is_mock else "LIVE"
         logger.info(f"[GeminiProvider] Initialized in {mode_str} mode (model: {self.model})")
 
+    def _get_active_model(self) -> str:
+        return self.model or "gemini-1.5-flash"
+
     def _call_gemini_sync(self, contents: str) -> Dict[str, Any]:
         from google import genai
         client = genai.Client(api_key=self.api_key)
+        active_model = self._get_active_model()
         res = client.models.generate_content(
-            model=self.model,
+            model=active_model,
             contents=contents
         )
         content = res.text or ""

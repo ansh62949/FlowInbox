@@ -42,7 +42,7 @@ async def request_understanding_node(state: FlowInboxState) -> FlowInboxState:
             intent = "interview_prep"
         elif "recruiter" in req_lower or "follow" in req_lower:
             intent = "recruiter_followup"
-        elif "summarize" in req_lower or "digest" in req_lower or "important" in req_lower:
+        elif "summarize" in req_lower or "digest" in req_lower:
             intent = "daily_digest"
 
     state["intent"] = intent
@@ -174,22 +174,60 @@ async def agent_tool_loop_node(state: FlowInboxState) -> FlowInboxState:
         state["tool_results"].append({"tool_name": "search_emails", "result": res.data})
         state["retrieved_context"].extend(res.emails)
 
-        context_str = "\n".join([f"- Sender: {e.get('sender')} | Subject: {e.get('subject')} | Body: {e.get('snippet')}" for e in res.emails])
+        frontend_url = settings.FRONTEND_URL.rstrip('/')
+        context_str = "\n".join([f"- Subject: {e.get('subject')} | Sender: {e.get('sender')} | Snippet: {e.get('snippet')} | ID: {e.get('id')}" for e in res.emails])
         digest_prompt = (
-            "Summarize the key information from these retrieved emails into a clean, bulleted daily digest:\n"
+            "Summarize the user's unread/recent inbox messages into an executive summary:\n"
             f"Retrieved Emails:\n{context_str}\n\n"
             "Formatting Rules:\n"
-            "- Start with a header: '### Daily Inbox Digest'\n"
-            "- Format each email takeaway as a bullet starting with a bold lead phrase (e.g. '- **Sender / Topic**: Brief 1-2 sentence overview.')\n"
-            "- Keep points concise and scannable."
+            "- Start with a clear header: '### 📥 Daily Inbox Digest'\n"
+            "- Include an 'Overview' sentence summarizing overall inbox urgency and actionable status.\n"
+            f"- List key actionable threads as bullet points formatted with markdown links: '[Subject Line]({frontend_url}/inbox?thread=ID)' — short 1-line description.\n"
+            "- Keep response concise, grounded, and clean."
         )
         try:
             llm_digest = await llm_manager.generate([{"role": "user", "content": digest_prompt}])
             state["final_response"] = llm_digest.get("content", "").strip()
         except Exception as e:
-            logger.warning(f"[AgentToolLoop] LLM call failed for daily digest: {str(e)}. Using fallback text.")
-            state["errors"].append(f"LLM daily digest fallback: {str(e)}")
-            state["final_response"] = f"Daily inbox summary: retrieved {len(res.emails)} relevant emails."
+            logger.error(f"[AgentToolLoop] LLM call failed for daily digest: {str(e)}", exc_info=True)
+            state["errors"].append(f"LLM daily digest error: {str(e)}")
+            state["final_response"] = f"Daily inbox summary: retrieved {len(res.emails)} relevant emails. (LLM Provider Error: {str(e)})"
+
+    else:
+        # general_query or fallback intent handler
+        res = await search_emails_func(SearchEmailsInput(user_id=user_id, query=req))
+        state["tool_calls"].append({"tool": "search_emails", "input": {"query": req}})
+        state["tool_results"].append({"tool_name": "search_emails", "result": res.data})
+        state["retrieved_context"].extend(res.emails)
+
+        if not res.emails:
+            prompt = (
+                f"The user asked: '{req}'\n\n"
+                "You searched their inbox, but found 0 relevant emails or matching documents.\n"
+                "Respond directly and clearly stating that no matching emails or information were found in their inbox for this query."
+            )
+        else:
+            context_str = "\n".join([
+                f"- ID: {e.get('id')} | Sender: {e.get('sender')} | Subject: {e.get('subject')} | Snippet: {e.get('snippet')} | Date: {e.get('sent_at')}"
+                for e in res.emails
+            ])
+            prompt = (
+                f"Answer the user's question directly and thoroughly based strictly on the retrieved inbox context below.\n"
+                f"User Question: '{req}'\n\n"
+                f"Retrieved Inbox Context:\n{context_str}\n\n"
+                "Formatting & Tone Rules:\n"
+                "- Provide a clear, natural, and grounded answer referencing retrieved emails.\n"
+                "- Use markdown bolding and list formatting for key items.\n"
+                f"- Link important email threads using markdown format: '[Subject Line]({frontend_url}/inbox?thread=ID)'."
+            )
+
+        try:
+            llm_res = await llm_manager.generate([{"role": "user", "content": prompt}])
+            state["final_response"] = llm_res.get("content", "").strip()
+        except Exception as e:
+            logger.error(f"[AgentToolLoop] LLM call failed for general query: {str(e)}", exc_info=True)
+            state["errors"].append(f"LLM general query error: {str(e)}")
+            state["final_response"] = f"Searched inbox for '{req}' and found {len(res.emails)} matching emails. (LLM Provider Error: {str(e)})"
 
     return state
 
@@ -233,6 +271,10 @@ async def final_response_node(state: FlowInboxState) -> FlowInboxState:
         return state
 
     if not state.get("final_response"):
+        logger.warning(
+            f"[FinalResponseNode] Safety fallback triggered! No final_response was set in state for intent '{state.get('intent')}'. "
+            f"Context count: {len(state.get('retrieved_context', []))}, Pending actions: {len(state.get('pending_actions', []))}"
+        )
         state["final_response"] = (
             f"Successfully executed workflow for intent '{state['intent']}'. "
             f"Found {len(state['retrieved_context'])} relevant context documents. "

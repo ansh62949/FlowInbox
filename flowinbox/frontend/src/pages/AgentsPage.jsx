@@ -122,7 +122,7 @@ export default function AgentsPage() {
         if (res.approval_status === 'pending') {
           replyContent = `### Action Pending Approval\n\nI have generated an action request (**${res.intent || 'Consequential Email Action'}**) that requires your explicit review.\n\nPlease check the **Approvals** page to inspect and approve this action before execution.`;
         } else {
-          replyContent = `### Task Completed Successfully\n\n- **Intent Identified:** ${res.intent || 'Inquiry / Inbox Search'}\n- **Status:** ${res.status || 'Success'}\n\nI have processed your query across your inbox and vector index.`;
+          replyContent = `Unable to generate a detailed response for intent '${res.intent || 'general_query'}'. Please try rephrasing your prompt.`;
         }
       }
 
@@ -132,7 +132,7 @@ export default function AgentsPage() {
         agentName: selectedAgent.name,
         content: replyContent,
         intent: res.intent,
-        plan: res.plan || ['1. Analyzed query intent', '2. Queried vector context', '3. Formulated response'],
+        plan: res.plan && res.plan.length > 0 ? res.plan : null,
         approvalStatus: res.approval_status,
         pendingActions: res.pending_actions || [],
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })

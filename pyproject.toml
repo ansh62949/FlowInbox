@@ -15,5 +15,5 @@ dependencies = [
     "streamlit>=1.52.2",
 ]
 
-[tool.uv.workspace]
-members = ["flowinbox/backend"]
+
+

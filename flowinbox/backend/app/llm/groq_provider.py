@@ -17,6 +17,9 @@ class GroqProvider(LLMProvider):
         mode_str = "MOCK" if self.is_mock else "LIVE"
         logger.info(f"[GroqProvider] Initialized in {mode_str} mode (model: {self.model})")
 
+    def _get_active_model(self) -> str:
+        return self.model or "llama-3.3-70b-versatile"
+
     async def generate_response(
         self,
         messages: List[Dict[str, str]],
@@ -24,6 +27,7 @@ class GroqProvider(LLMProvider):
         tools: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         last_user_msg = messages[-1]["content"] if messages else ""
+        active_model = self._get_active_model()
 
         if self.is_mock:
             await asyncio.sleep(0.05)
@@ -32,15 +36,15 @@ class GroqProvider(LLMProvider):
                 "content": f"Groq mock response for: {last_user_msg}",
                 "tool_calls": [],
                 "provider": "groq",
-                "model": self.model
+                "model": active_model
             }
 
-        logger.info(f"[GroqProvider] [LIVE] Calling Groq API model '{self.model}'...")
+        logger.info(f"[GroqProvider] [LIVE] Calling Groq API model '{active_model}'...")
         try:
             from groq import AsyncGroq
             client = AsyncGroq(api_key=self.api_key)
             res = await client.chat.completions.create(
-                model=self.model,
+                model=active_model,
                 messages=messages,
                 temperature=temperature
             )

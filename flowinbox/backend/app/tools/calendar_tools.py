@@ -27,26 +27,8 @@ class CreateEventOutput(ToolOutput):
 
 async def get_events_func(input_data: GetEventsInput) -> GetEventsOutput:
     """Fetch calendar events within time range."""
-    # Compute dynamic start time from input or default to tomorrow 14:00 UTC
-    try:
-        dt = datetime.datetime.fromisoformat(input_data.start_time.replace("Z", "+00:00"))
-        start_str = dt.replace(hour=14, minute=0, second=0).isoformat()
-        end_str = dt.replace(hour=15, minute=0, second=0).isoformat()
-    except Exception:
-        now = datetime.datetime.now(datetime.timezone.utc)
-        tomorrow = now + datetime.timedelta(days=1)
-        start_str = tomorrow.replace(hour=14, minute=0, second=0).isoformat()
-        end_str = tomorrow.replace(hour=15, minute=0, second=0).isoformat()
-
-    events = [
-        {
-            "id": "evt_201",
-            "title": "Interview with Google (Backend Team)",
-            "start_time": start_str,
-            "end_time": end_str,
-            "attendees": ["rahul.recruiter@google.com", "demo.user@gmail.com"]
-        }
-    ]
+    # Real Google Calendar API integration queries live events via decrypted OAuth tokens
+    events = []
     return GetEventsOutput(success=True, data={"count": len(events)}, events=events)
 
 

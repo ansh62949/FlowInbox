@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Users, UserPlus, Shield, Mail, AlertCircle } from 'lucide-react';
+import { Users, UserPlus, Shield, Mail, AlertCircle, Copy, Check } from 'lucide-react';
 import workspacesApi from '../api/workspaces';
 import { useAuth } from '../context/AuthContext';
 
 export default function TeamPage() {
   const { user } = useAuth();
+  const [activeWorkspace, setActiveWorkspace] = useState(null);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('MEMBER');
+  const [createdInvite, setCreatedInvite] = useState(null);
+  const [copiedToken, setCopiedToken] = useState(false);
 
   useEffect(() => {
     loadTeamData();
@@ -20,16 +23,16 @@ export default function TeamPage() {
     setLoading(true);
     setErrorMessage('');
     try {
-      const workspaceId = user?.id || 'default';
-      const data = await workspacesApi.getMembers(workspaceId).catch(() => null);
-      if (data && data.length) {
-        setMembers(data);
+      const wsList = await workspacesApi.list().catch(() => []);
+      if (wsList && wsList.length > 0) {
+        const currentWs = wsList[0];
+        setActiveWorkspace(currentWs);
+        const memberData = await workspacesApi.getMembers(currentWs.id).catch(() => []);
+        setMembers(memberData);
       } else if (user) {
         setMembers([
           { id: user.id, email: user.email, full_name: user.full_name || 'You', role: 'OWNER', joined_at: new Date().toISOString() }
         ]);
-      } else {
-        setMembers([]);
       }
     } catch (err) {
       console.error('Error loading team members:', err);
@@ -41,29 +44,39 @@ export default function TeamPage() {
 
   const handleInvite = async (e) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
+    if (!inviteEmail.trim() || !activeWorkspace) return;
     setErrorMessage('');
+    setCreatedInvite(null);
     try {
-      const workspaceId = user?.id || 'default';
-      const newM = await workspacesApi.inviteMember(workspaceId, inviteEmail.trim(), inviteRole);
-      setMembers((prev) => [...prev, newM]);
+      const inv = await workspacesApi.inviteMember(activeWorkspace.id, inviteEmail.trim(), inviteRole);
+      setCreatedInvite(inv);
       setInviteEmail('');
-      setShowInviteModal(false);
     } catch (err) {
-      setErrorMessage('Failed to send invite: ' + (err.message || 'Server error'));
+      setErrorMessage('Failed to send invite: ' + (err.response?.data?.detail || err.message || 'Server error'));
     }
+  };
+
+  const handleCopyToken = (token) => {
+    navigator.clipboard.writeText(token);
+    setCopiedToken(true);
+    setTimeout(() => setCopiedToken(false), 2500);
   };
 
   return (
     <div className="p-6 max-w-5xl mx-auto w-full flex flex-col gap-6 select-none bg-[#f8fbfe] min-h-full">
       <div className="flex items-center justify-between pb-4 border-b border-[#DCE5EF]">
         <div>
-          <h1 className="text-xl font-bold text-[#172033]">Workspace Team & Members</h1>
-          <p className="text-xs text-[#536176]">Manage teammates, roles, and shared inbox assignments.</p>
+          <h1 className="text-xl font-bold text-[#172033]">
+            {activeWorkspace ? activeWorkspace.name : 'Workspace Team & Members'}
+          </h1>
+          <p className="text-xs text-[#536176]">Manage teammates, roles, and tokenized workspace invitations.</p>
         </div>
 
         <button
-          onClick={() => setShowInviteModal(true)}
+          onClick={() => {
+            setCreatedInvite(null);
+            setShowInviteModal(true);
+          }}
           className="h-8 px-4 bg-[#172335] hover:bg-[#2d7ed0] text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors"
         >
           <UserPlus className="w-3.5 h-3.5" />
@@ -71,9 +84,19 @@ export default function TeamPage() {
         </button>
       </div>
 
+      {errorMessage && (
+        <div className="p-3 bg-[#FEF2F2] border border-[#FCA5A5] rounded-xl text-xs text-[#991B1B] font-semibold flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-[#DC2626]" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
       <div className="bg-white border border-[#d7e3ee] rounded-2xl overflow-hidden shadow-sm">
-        <div className="px-5 py-3.5 border-b border-[#DCE5EF] bg-[#F7FAFD]">
+        <div className="px-5 py-3.5 border-b border-[#DCE5EF] bg-[#F7FAFD] flex items-center justify-between">
           <span className="text-xs font-bold text-[#172033]">Teammates ({members.length})</span>
+          {activeWorkspace && (
+            <span className="text-[11px] font-mono text-[#8995A7]">UUID: {activeWorkspace.id}</span>
+          )}
         </div>
 
         <div className="divide-y divide-[#E9EFF5]">
@@ -108,31 +131,65 @@ export default function TeamPage() {
         <div className="fixed inset-0 bg-black/20 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-xl border border-[#DCE5EF] p-5 w-96 animate-scale-in">
             <h3 className="text-sm font-bold text-[#172033] mb-1">Invite Team Member</h3>
-            <form onSubmit={handleInvite} className="flex flex-col gap-3 mt-3">
-              <input
-                type="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="colleague@company.com"
-                className="w-full h-8 px-3 bg-[#F7FAFD] border border-[#DCE5EF] rounded-xl text-xs"
-                required
-              />
-              <div className="flex justify-end gap-2 pt-2">
+
+            {createdInvite ? (
+              <div className="flex flex-col gap-3 my-2">
+                <div className="p-3 bg-[#ECFDF5] border border-[#A7F3D0] rounded-xl text-xs text-[#065F46]">
+                  <p className="font-bold">Invitation Token Created!</p>
+                  <p className="text-[11px] text-[#047857] mt-0.5">Share this token with {createdInvite.email}:</p>
+                </div>
+                <div className="flex items-center gap-2 p-2 bg-[#F7FAFD] border border-[#DCE5EF] rounded-xl font-mono text-xs text-[#172033] font-bold truncate">
+                  <span className="truncate flex-1">{createdInvite.invitation_token}</span>
+                  <button
+                    onClick={() => handleCopyToken(createdInvite.invitation_token)}
+                    className="p-1 text-[#2d7ed0] hover:bg-white rounded-md shrink-0"
+                    title="Copy Token"
+                  >
+                    {copiedToken ? <Check className="w-3.5 h-3.5 text-[#059669]" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
                 <button
-                  type="button"
                   onClick={() => setShowInviteModal(false)}
-                  className="px-3 h-8 text-xs font-medium text-[#536176]"
+                  className="mt-2 h-8 w-full text-xs font-semibold bg-[#3186D8] text-white rounded-xl shadow-2xs"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 h-8 text-xs font-semibold bg-[#3186D8] text-white rounded-xl shadow-2xs"
-                >
-                  Send Invite
+                  Done
                 </button>
               </div>
-            </form>
+            ) : (
+              <form onSubmit={handleInvite} className="flex flex-col gap-3 mt-3">
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="colleague@company.com"
+                  className="w-full h-8 px-3 bg-[#F7FAFD] border border-[#DCE5EF] rounded-xl text-xs"
+                  required
+                />
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                  className="w-full h-8 px-3 bg-[#F7FAFD] border border-[#DCE5EF] rounded-xl text-xs font-semibold text-[#172033]"
+                >
+                  <option value="MEMBER">Member</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowInviteModal(false)}
+                    className="px-3 h-8 text-xs font-medium text-[#536176]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 h-8 text-xs font-semibold bg-[#3186D8] text-white rounded-xl shadow-2xs"
+                  >
+                    Send Invite Token
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

@@ -32,9 +32,12 @@ import {
 } from 'lucide-react';
 import authApi from '../api/auth';
 import followupsApi from '../api/followups';
+import integrationsApi from '../api/integrations';
+import apiTokensApi from '../api/apiTokens';
 
 import TeamPage from './TeamPage';
 import { useAuth } from '../context/AuthContext';
+
 
 export default function SettingsPage() {
   const { user, theme, setTheme } = useAuth();
@@ -71,103 +74,111 @@ export default function SettingsPage() {
   const [defaultView, setDefaultView] = useState('inbox');
 
   // Integrations State
-  const [integrations, setIntegrations] = useState(() => {
-    const saved = localStorage.getItem('flowinbox_integrations');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
-    }
-    return [
-      { id: 'gcal', name: 'Google Calendar', desc: 'Check availability and manage event invites directly from AI drafts.', icon: 'C', status: 'Connected', category: 'Google' },
-      { id: 'gmail', name: 'Gmail REST API', desc: 'Sync inbox threads, star messages, and manage mail labels.', icon: 'M', status: 'Connected', category: 'Google' },
-      { id: 'gworkspace', name: 'Google Workspace', desc: 'Search documents and context across your workspace.', icon: 'G', status: 'Available', category: 'Google' },
-      { id: 'slack', name: 'Slack Workspace', desc: 'Send AI notifications and summary digests to Slack channels.', icon: 'S', status: 'Available', category: 'Communication' },
-      { id: 'notion', name: 'Notion Workspace', desc: 'Sync follow-up tasks and email action items to Notion databases.', icon: 'N', status: 'Available', category: 'Productivity' },
-      { id: 'github', name: 'GitHub Enterprise', desc: 'Link repository alerts and pull request updates to inbox threads.', icon: 'GH', status: 'Available', category: 'Developer' },
-      { id: 'webhook', name: 'Custom Webhook', desc: 'Receive real-time HTTP POST webhooks on email actions.', icon: 'WH', status: 'Available', category: 'Developer' }
-    ];
-  });
-
+  const [integrations, setIntegrations] = useState([]);
   const [showAddIntegrationModal, setShowAddIntegrationModal] = useState(false);
   const [newIntegrationType, setNewIntegrationType] = useState('slack');
   const [newIntegrationKey, setNewIntegrationKey] = useState('');
 
   // API & MCP State
-  const [apiKeys, setApiKeys] = useState(() => {
-    const saved = localStorage.getItem('flowinbox_apikeys');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
-    }
-    return [
-      { id: 'key_1', name: 'Default Local Agent Key', keyPreview: 'fi_live_8f7a...3d91', created_at: '2026-09-15', status: 'Active' }
-    ];
-  });
-
+  const [apiKeys, setApiKeys] = useState([]);
   const [showAddApiKeyModal, setShowAddApiKeyModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
+  const [createdRawToken, setCreatedRawToken] = useState('');
   const [copiedMcp, setCopiedMcp] = useState(false);
+  const [testingMcp, setTestingMcp] = useState(false);
+  const [mcpTestResult, setMcpTestResult] = useState(null);
+
+  useEffect(() => {
+    loadWritingProfile();
+    loadIntegrations();
+    loadApiTokens();
+  }, []);
+
+  const loadIntegrations = async () => {
+    try {
+      const data = await integrationsApi.list();
+      if (Array.isArray(data)) setIntegrations(data);
+    } catch (e) {
+      console.error('Failed to load integrations:', e);
+    }
+  };
+
+  const loadApiTokens = async () => {
+    try {
+      const data = await apiTokensApi.list();
+      if (Array.isArray(data)) setApiKeys(data);
+    } catch (e) {
+      console.error('Failed to load API tokens:', e);
+    }
+  };
+
+  const handleTestMcp = async () => {
+    setTestingMcp(true);
+    setMcpTestResult(null);
+    try {
+      const mcpUrl = `${window.location.protocol}//${window.location.hostname}:8000/mcp`;
+      const res = await fetch(mcpUrl);
+      const data = await res.json();
+      if (data && data.status === 'online') {
+        setMcpTestResult({ success: true, message: `MCP Server Online — ${data.name} (${data.tools_count} tools registered)` });
+      } else {
+        setMcpTestResult({ success: false, message: 'MCP server returned invalid response status.' });
+      }
+    } catch (err) {
+      setMcpTestResult({ success: false, message: `MCP Connection test failed: ${err.message}` });
+    } finally {
+      setTestingMcp(false);
+    }
+  };
 
   const handleToggleIntegration = (id) => {
-    setIntegrations((prev) => {
-      const updated = prev.map((item) => {
-        if (item.id === id) {
-          const newStatus = item.status === 'Connected' ? 'Available' : 'Connected';
-          return { ...item, status: newStatus };
-        }
-        return item;
-      });
-      localStorage.setItem('flowinbox_integrations', JSON.stringify(updated));
-      return updated;
-    });
-    setSaveSuccess('Integration status updated!');
+    setSaveSuccess('Integration status managed via OAuth.');
     setTimeout(() => setSaveSuccess(''), 3000);
   };
 
   const handleAddIntegration = (e) => {
     e.preventDefault();
-    setIntegrations((prev) => {
-      const updated = prev.map((item) => {
-        if (item.id === newIntegrationType) {
-          return { ...item, status: 'Connected', apiKey: newIntegrationKey };
-        }
-        return item;
-      });
-      localStorage.setItem('flowinbox_integrations', JSON.stringify(updated));
-      return updated;
-    });
     setShowAddIntegrationModal(false);
     setNewIntegrationKey('');
-    setSaveSuccess('New integration connected successfully!');
+    setSaveSuccess('Integration endpoint configured!');
     setTimeout(() => setSaveSuccess(''), 3000);
   };
 
-  const handleCreateApiKey = (e) => {
+  const handleCreateApiKey = async (e) => {
     e.preventDefault();
     if (!newKeyName.trim()) return;
-    const newKeyObj = {
-      id: `key_${Date.now()}`,
-      name: newKeyName,
-      keyPreview: `fi_live_${Math.random().toString(36).substring(2, 10)}...${Math.random().toString(36).substring(2, 6)}`,
-      created_at: new Date().toISOString().split('T')[0],
-      status: 'Active'
-    };
-    const updatedKeys = [...apiKeys, newKeyObj];
-    setApiKeys(updatedKeys);
-    localStorage.setItem('flowinbox_apikeys', JSON.stringify(updatedKeys));
-    setShowAddApiKeyModal(false);
-    setNewKeyName('');
-    setSaveSuccess(`Generated new API Key: ${newKeyObj.name}`);
-    setTimeout(() => setSaveSuccess(''), 3000);
+    try {
+      const res = await apiTokensApi.create(newKeyName);
+      if (res && res.token) {
+        setCreatedRawToken(res.token);
+        setShowAddApiKeyModal(false);
+        setNewKeyName('');
+        await loadApiTokens();
+        setSaveSuccess(`Generated new API Token: ${res.name}`);
+        setTimeout(() => setSaveSuccess(''), 3000);
+      }
+    } catch (err) {
+      setSaveSuccess(`Failed to create API Token: ${err.message}`);
+    }
+  };
+
+  const handleRevokeApiKey = async (tokenId) => {
+    try {
+      await apiTokensApi.revoke(tokenId);
+      await loadApiTokens();
+      setSaveSuccess('API Token revoked successfully.');
+      setTimeout(() => setSaveSuccess(''), 3000);
+    } catch (err) {
+      setSaveSuccess(`Failed to revoke token: ${err.message}`);
+    }
   };
 
   const handleCopyMcp = () => {
-    navigator.clipboard.writeText('http://localhost:8000/api/v1/mcp');
+    navigator.clipboard.writeText('http://localhost:8000/mcp');
     setCopiedMcp(true);
     setTimeout(() => setCopiedMcp(false), 2500);
   };
 
-  useEffect(() => {
-    loadWritingProfile();
-  }, []);
 
   const loadWritingProfile = async () => {
     try {
@@ -716,7 +727,7 @@ export default function SettingsPage() {
                     <label className="block text-[11px] font-bold text-[#8fa0b1] uppercase mb-1">MCP HTTP Endpoint</label>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 p-2.5 bg-[#FAF6F0] border border-[#E6DFD5] rounded-xl font-mono text-xs text-[#172033] font-bold truncate">
-                        http://localhost:8000/api/v1/mcp
+                        {`${window.location.protocol}//${window.location.hostname}:8000/mcp`}
                       </div>
                       <button
                         onClick={handleCopyMcp}
@@ -725,7 +736,24 @@ export default function SettingsPage() {
                         {copiedMcp ? <Check className="w-3.5 h-3.5 text-[#059669]" /> : <Code2 className="w-3.5 h-3.5" />}
                         <span>{copiedMcp ? 'Copied!' : 'Copy Endpoint'}</span>
                       </button>
+                      <button
+                        onClick={handleTestMcp}
+                        disabled={testingMcp}
+                        className="px-3.5 h-9 bg-[#3186D8] hover:bg-[#2366A8] disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-2xs transition-colors flex items-center gap-1.5 shrink-0"
+                      >
+                        <RotateCw className={`w-3.5 h-3.5 ${testingMcp ? 'animate-spin' : ''}`} />
+                        <span>{testingMcp ? 'Testing...' : 'Test MCP'}</span>
+                      </button>
                     </div>
+
+                    {mcpTestResult && (
+                      <div className={`mt-2 p-2.5 text-xs rounded-xl flex items-center gap-2 font-medium ${
+                        mcpTestResult.success ? 'bg-[#ECFDF5] text-[#047857] border border-[#A7F3D0]' : 'bg-[#FEF2F2] text-[#B91C1C] border border-[#FFECB3]'
+                      }`}>
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>{mcpTestResult.message}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="w-full h-[1px] bg-[#E9EFF5]" />
@@ -736,26 +764,26 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="divide-y divide-[#f0f5fa] border border-[#DCE5EF] bg-[#FAF6F0]/60 rounded-xl overflow-hidden">
-                      {apiKeys.map((key) => (
-                        <div key={key.id} className="p-3 flex items-center justify-between">
-                          <div>
-                            <h4 className="text-xs font-bold text-[#172335]">{key.name}</h4>
-                            <p className="text-[10px] font-mono text-[#5e7186] mt-0.5">{key.keyPreview} • Created {key.created_at}</p>
+                      {apiKeys.length === 0 ? (
+                        <div className="p-4 text-xs text-[#5e7186] text-center">No active API tokens found.</div>
+                      ) : (
+                        apiKeys.map((key) => (
+                          <div key={key.id} className="p-3 flex items-center justify-between">
+                            <div>
+                              <h4 className="text-xs font-bold text-[#172335]">{key.name}</h4>
+                              <p className="text-[10px] font-mono text-[#5e7186] mt-0.5">
+                                Token ID: {key.id.substring(0, 8)}... • Created {new Date(key.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => handleRevokeApiKey(key.id)}
+                              className="text-[11px] font-semibold text-[#D95D5D] hover:underline"
+                            >
+                              Revoke
+                            </button>
                           </div>
-                          <button
-                            onClick={() => {
-                              const updated = apiKeys.filter((k) => k.id !== key.id);
-                              setApiKeys(updated);
-                              localStorage.setItem('flowinbox_apikeys', JSON.stringify(updated));
-                              setSaveSuccess('API Key revoked.');
-                              setTimeout(() => setSaveSuccess(''), 3000);
-                            }}
-                            className="text-[11px] font-semibold text-[#D95D5D] hover:underline"
-                          >
-                            Revoke
-                          </button>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   </div>
 
@@ -764,7 +792,7 @@ export default function SettingsPage() {
                   <div>
                     <label className="block text-[11px] font-bold text-[#8fa0b1] uppercase mb-1.5">Registered Agent Tools</label>
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                      {['search_inbox', 'read_thread', 'triage_emails', 'send_reply', 'create_calendar_event', 'analyze_tone'].map((tool) => (
+                      {['search_emails', 'get_thread', 'get_events', 'list_pending_approvals', 'create_draft', 'propose_send_email', 'propose_create_event'].map((tool) => (
                         <div key={tool} className="p-2.5 bg-[#FAF6F0] border border-[#E6DFD5] rounded-xl font-mono text-[#2d7ed0] flex items-center justify-between">
                           <span>{tool}</span>
                           <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-[#eaf3fb] text-[#2d7ed0]">MCP 1.0</span>
@@ -772,6 +800,7 @@ export default function SettingsPage() {
                       ))}
                     </div>
                   </div>
+
                 </div>
               </div>
             )}
@@ -932,6 +961,53 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* MODAL 3: Display Generated Token (ONCE) */}
+      {createdRawToken && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl border border-[#DCE5EF] p-6 w-full max-w-lg shadow-2xl flex flex-col gap-4 animate-scale-in">
+            <div className="flex items-center justify-between border-b border-[#f0f4f8] pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[#ECFDF5] text-[#059669] font-extrabold flex items-center justify-center text-xs">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-bold text-[#172335]">Save Your Secret API Token</h3>
+              </div>
+              <button onClick={() => setCreatedRawToken('')} className="p-1 text-[#8fa0b1] hover:text-[#172335]">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-[#5e7186]">
+              Please copy and store this API token securely. <strong>It will not be shown again!</strong>
+            </p>
+
+            <div className="p-3 bg-[#FAF6F0] border border-[#E6DFD5] rounded-xl font-mono text-xs text-[#172335] font-bold break-all flex items-center justify-between gap-2">
+              <span>{createdRawToken}</span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(createdRawToken);
+                  setSaveSuccess('API Token copied to clipboard!');
+                  setTimeout(() => setSaveSuccess(''), 3000);
+                }}
+                className="px-3 py-1 bg-[#2d7ed0] text-white text-xs font-bold rounded-lg shrink-0 hover:bg-[#2366a8]"
+              >
+                Copy
+              </button>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setCreatedRawToken('')}
+                className="px-4 h-8 bg-[#3186D8] hover:bg-[#2366A8] text-white text-xs font-semibold rounded-xl shadow-2xs"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

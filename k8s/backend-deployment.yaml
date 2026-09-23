@@ -18,7 +18,7 @@ spec:
       containers:
         - name: backend
           image: flowinbox-backend:local
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           ports:
             - containerPort: 8000
               name: http
@@ -31,16 +31,21 @@ spec:
             httpGet:
               path: /api/v1/health
               port: 8000
-            failureThreshold: 30
+            failureThreshold: 60
             periodSeconds: 2
+
           readinessProbe:
             httpGet:
               path: /api/v1/health
               port: 8000
             periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 5
           livenessProbe:
             httpGet:
               path: /api/v1/health
               port: 8000
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
 

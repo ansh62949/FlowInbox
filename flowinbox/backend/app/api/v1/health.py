@@ -22,5 +22,7 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         "environment": settings.ENVIRONMENT,
         "database": db_status,
         "vector_store": settings.VECTOR_STORE,
-        "llm_provider": settings.LLM_PROVIDER
+        "llm_provider": settings.LLM_PROVIDER,
+        "groq_model": settings.GROQ_MODEL,
+        "gemini_model": settings.GEMINI_MODEL
     }

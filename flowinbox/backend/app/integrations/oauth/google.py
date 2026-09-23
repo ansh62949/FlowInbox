@@ -1,5 +1,6 @@
 import httpx
 from typing import Dict, Any, Optional
+from urllib.parse import urlencode
 from app.core.config import settings
 from app.core.security import encrypt_token, decrypt_token
 
@@ -34,7 +35,7 @@ class GoogleOAuthService:
             "prompt": "consent",
             "state": state
         }
-        query = "&".join([f"{k}={v}" for k, v in params.items()])
+        query = urlencode(params)
         return f"{base_url}?{query}"
 
 

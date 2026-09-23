@@ -3,23 +3,26 @@ import uuid
 from unittest.mock import AsyncMock, patch
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from app.main import app
+from app.main import app as fastapi_app
+import app.models
 from app.db.base import Base
+from app.models.user import User
 from app.models.agent import Approval
 from app.core.security import create_access_token
 
-test_engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
-TestingSessionLocal = async_sessionmaker(bind=test_engine, class_=AsyncSession, expire_on_commit=False)
-
+from tests.conftest import TestingSessionLocal
 
 @pytest.mark.asyncio
 async def test_mcp_propose_send_email_creates_pending_approval_and_does_not_execute_tool():
     """Verify that calling propose_send_email over MCP HTTP creates a pending Approval DB row and never calls send_email_func."""
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    async with TestingSessionLocal() as session:
+        user = User(email="test_mcp@example.com", full_name="Test MCP User")
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        test_user_id = user.id
 
-    test_user_id = str(uuid.uuid4())
-    jwt_token = create_access_token(subject=test_user_id)
+    jwt_token = create_access_token(subject=str(test_user_id))
 
     payload = {
         "name": "propose_send_email",
@@ -32,9 +35,11 @@ async def test_mcp_propose_send_email_creates_pending_approval_and_does_not_exec
 
     headers = {"Authorization": f"Bearer {jwt_token}"}
 
-    with patch("app.mcp.tools.AsyncSessionLocal", TestingSessionLocal), \
+    with patch("app.db.session.AsyncSessionLocal", TestingSessionLocal), \
+         patch("app.tools.email_tools.AsyncSessionLocal", TestingSessionLocal), \
+         patch("app.mcp.tools.AsyncSessionLocal", TestingSessionLocal), \
          patch("app.tools.email_tools.send_email_func", new_callable=AsyncMock) as mock_send_email:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=fastapi_app), base_url="http://test") as client:
             res = await client.post("/api/v1/mcp/tools/call", json=payload, headers=headers)
 
         assert res.status_code == 200

@@ -1,13 +1,14 @@
+import logging
 import datetime
 import base64
 import email.utils
 import email.mime.text
 from typing import List, Dict, Any, Optional
 import httpx
-
-
 import re
 import html
+
+logger = logging.getLogger("flowinbox.integrations.gmail")
 
 def _clean_html(raw_html: str) -> str:
     if not raw_html:
@@ -39,7 +40,7 @@ class GmailClient:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(url, headers=self.headers, timeout=12.0)
                 if resp.status_code != 200:
-                    print(f"[GmailClient] API list messages status {resp.status_code}: {resp.text}")
+                    logger.warning(f"[GmailClient] API list messages status {resp.status_code}: {resp.text}")
                     return []
 
                 list_data = resp.json()
@@ -66,7 +67,7 @@ class GmailClient:
 
                 return parsed_messages
         except Exception as err:
-            print("[GmailClient] Network / API error during fetch_messages:", err)
+            logger.warning(f"[GmailClient] Network / API error during fetch_messages: {str(err)}")
             return []
 
     async def modify_message_labels(self, message_id: str, add_labels: List[str] = None, remove_labels: List[str] = None) -> bool:
@@ -84,7 +85,7 @@ class GmailClient:
                 resp = await client.post(url, headers=self.headers, json=payload, timeout=10.0)
                 return resp.status_code == 200
         except Exception as err:
-            print(f"[GmailClient] Failed to modify labels for message {message_id}:", err)
+            logger.warning(f"[GmailClient] Failed to modify labels for message {message_id}: {str(err)}")
             return False
 
     async def star_message(self, message_id: str, is_starred: bool = True) -> bool:
@@ -113,7 +114,7 @@ class GmailClient:
                 resp = await client.post(url, headers=self.headers, timeout=10.0)
                 return resp.status_code == 200
         except Exception as err:
-            print(f"[GmailClient] Trash message error {message_id}:", err)
+            logger.warning(f"[GmailClient] Trash message error {message_id}: {str(err)}")
             return False
 
     async def spam_message(self, message_id: str) -> bool:
@@ -140,10 +141,10 @@ class GmailClient:
                 resp = await client.post(url, headers=self.headers, json=payload, timeout=12.0)
                 if resp.status_code == 200:
                     return resp.json()
-                print(f"[GmailClient] send_email failed status {resp.status_code}: {resp.text}")
+                logger.warning(f"[GmailClient] send_email failed status {resp.status_code}: {resp.text}")
                 return None
         except Exception as err:
-            print("[GmailClient] Network error during send_email:", err)
+            logger.warning(f"[GmailClient] Network error during send_email: {str(err)}")
             return None
 
     async def fetch_labels(self) -> List[Dict[str, Any]]:
@@ -158,7 +159,7 @@ class GmailClient:
                     return resp.json().get("labels", [])
                 return []
         except Exception as err:
-            print("[GmailClient] fetch_labels error:", err)
+            logger.warning(f"[GmailClient] fetch_labels error: {str(err)}")
             return []
 
     def _parse_gmail_message(self, msg_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -174,9 +175,8 @@ class GmailClient:
             subject = header_dict.get("subject", "(No Subject)")
             sender = header_dict.get("from", "Unknown Sender")
             recipients = header_dict.get("to", "")
+            sent_at = None
             date_str = header_dict.get("date")
-
-            sent_at = datetime.datetime.now(datetime.timezone.utc)
             if date_str:
                 try:
                     parsed_date = email.utils.parsedate_to_datetime(date_str)
@@ -187,6 +187,25 @@ class GmailClient:
                 except Exception:
                     pass
 
+            if not sent_at:
+                internal_ms = msg_data.get("internalDate")
+                if internal_ms:
+                    try:
+                        sent_at = datetime.datetime.fromtimestamp(int(internal_ms) / 1000.0, tz=datetime.timezone.utc)
+                    except Exception:
+                        pass
+
+            if not sent_at:
+                sent_at = datetime.datetime.now(datetime.timezone.utc)
+
+            def _b64_decode(bdata: str) -> str:
+                if not bdata:
+                    return ""
+                try:
+                    padded = bdata + "=" * (-len(bdata) % 4)
+                    return base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8", errors="ignore")
+                except Exception:
+                    return bdata
 
             # Extract body text safely
             raw_body = ""
@@ -194,30 +213,21 @@ class GmailClient:
             if not parts and "body" in payload:
                 body_data = payload["body"].get("data")
                 if body_data:
-                    try:
-                        raw_body = base64.urlsafe_b64encode(body_data).decode("utf-8", errors="ignore")
-                    except Exception:
-                        pass
+                    raw_body = _b64_decode(body_data)
             else:
                 for part in parts:
                     if part.get("mimeType") == "text/plain":
                         bdata = part.get("body", {}).get("data")
                         if bdata:
-                            try:
-                                raw_body = base64.urlsafe_b64encode(bdata).decode("utf-8", errors="ignore")
-                                break
-                            except Exception:
-                                pass
+                            raw_body = _b64_decode(bdata)
+                            break
                 if not raw_body:
                     for part in parts:
                         if part.get("mimeType") == "text/html":
                             bdata = part.get("body", {}).get("data")
                             if bdata:
-                                try:
-                                    raw_body = base64.urlsafe_b64encode(bdata).decode("utf-8", errors="ignore")
-                                    break
-                                except Exception:
-                                    pass
+                                raw_body = _b64_decode(bdata)
+                                break
 
             # Clean raw HTML tags and entities
             clean_body = _clean_html(raw_body) if ("<" in raw_body and ">" in raw_body) else raw_body.strip()
@@ -267,5 +277,5 @@ class GmailClient:
                 "label_ids": label_ids
             }
         except Exception as err:
-            print("[GmailClient] Error parsing message:", err)
+            logger.warning(f"[GmailClient] Error parsing message: {str(err)}")
             return None

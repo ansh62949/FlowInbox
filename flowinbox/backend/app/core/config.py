@@ -22,26 +22,29 @@ class Settings(BaseSettings):
     # LLM Providers
     LLM_PROVIDER: str = "groq"
     LLM_FALLBACK_PROVIDER: str = "gemini"
-    GROQ_API_KEY: str = "mock_groq_key"
-    GEMINI_API_KEY: str = "mock_gemini_key"
-    GROQ_MODEL: str = "groq/compound-mini"
-    GEMINI_MODEL: str = "gemini-3.6-flash"
+    GROQ_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GEMINI_MODEL: str = "gemini-1.5-flash"
     
     # Embeddings
     EMBEDDING_PROVIDER: str = "fastembed"
     
+    # Background Sync Configuration
+    ENABLE_GMAIL_SYNC: bool = True
+
     # Observability (Optional)
     LANGSMITH_API_KEY: Optional[str] = None
     LANGSMITH_PROJECT: str = "flowinbox-ai"
     
     # Google OAuth Settings
-    GOOGLE_CLIENT_ID: str = "mock_client_id"
-    GOOGLE_CLIENT_SECRET: str = "mock_client_secret"
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
     
     # Security
-    FRONTEND_URL: str = "http://localhost:3000"
-    FRONTEND_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    FRONTEND_URL: str = "http://localhost:8080"
+    FRONTEND_ORIGINS: list[str] = ["http://localhost:8080", "http://localhost:5173", "http://localhost:3000"]
 
     JWT_SECRET: str = "super_secret_jwt_key_for_dev_mode_only"
 

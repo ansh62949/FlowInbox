@@ -1,4 +1,5 @@
 import uuid
+import asyncio
 from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -6,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_
 from pydantic import BaseModel
 
-from app.db.session import get_db
+from app.db.session import get_db, AsyncSessionLocal
 from app.models.email import EmailThread, Email
 from app.models.user import User, OAuthAccount
 from app.core.security import decrypt_token
@@ -14,6 +15,14 @@ from app.integrations.gmail.client import GmailClient, _clean_html
 from app.integrations.gmail.sync import GmailSyncService
 
 router = APIRouter(prefix="/inbox", tags=["Inbox"])
+
+
+async def _bg_sync_inbox(user_id: uuid.UUID, plain_token: str):
+    try:
+        async with AsyncSessionLocal() as bg_db:
+            await GmailSyncService.sync_user_inbox(bg_db, user_id, plain_token)
+    except Exception as err:
+        print("[InboxAPI] Background sync error:", err)
 
 
 class EmailSchema(BaseModel):
@@ -76,21 +85,14 @@ async def list_threads(
     """List email threads for authenticated user with folder, category, and real-time search filtering."""
     target_user = current_user
 
-    # Check if target user has an OAuth account and trigger sync if DB is empty
+    # Check if target user has an OAuth account and trigger non-blocking background sync
     oauth_acc = await _get_oauth_account(db, target_user.id)
     if oauth_acc:
-        count_res = await db.execute(
-            select(EmailThread).where(
-                EmailThread.user_id == target_user.id
-            )
-        )
-        user_threads = count_res.scalars().all()
-        if not user_threads:
-            try:
-                plain_token = decrypt_token(oauth_acc.encrypted_access_token)
-                await GmailSyncService.sync_user_inbox(db, target_user.id, plain_token)
-            except Exception as err:
-                print("[InboxAPI] Auto sync error:", err)
+        try:
+            plain_token = decrypt_token(oauth_acc.encrypted_access_token)
+            asyncio.create_task(_bg_sync_inbox(target_user.id, plain_token))
+        except Exception as err:
+            print("[InboxAPI] Background sync dispatch error:", err)
 
     stmt = select(EmailThread).where(
         EmailThread.user_id == target_user.id
@@ -179,6 +181,25 @@ async def list_threads(
             "emails": []
         })
     return output
+
+
+@router.post("/sync")
+async def sync_inbox(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Trigger manual sync of user's Gmail inbox into FlowInbox database."""
+    oauth_acc = await _get_oauth_account(db, current_user.id)
+    if not oauth_acc:
+        return {"status": "skipped", "reason": "No OAuth account connected"}
+
+    try:
+        plain_token = decrypt_token(oauth_acc.encrypted_access_token)
+        count = await GmailSyncService.sync_user_inbox(db, current_user.id, plain_token)
+        return {"status": "success", "synced_count": count}
+    except Exception as err:
+        print("[InboxAPI] Manual sync error:", err)
+        return {"status": "error", "message": str(err)}
 
 
 @router.get("/counts")
@@ -558,14 +579,17 @@ async def analyze_writing_style(
     current_user: User = Depends(get_current_user)
 ):
     """Analyze user's sent emails and generate a personalized writing style & tone profile."""
-    # Ensure inbox is synced if OAuth account exists
+    # Ensure inbox is synced if OAuth account exists (with a 12s timeout guard)
     oauth_acc = await _get_oauth_account(db, current_user.id)
     if oauth_acc:
         try:
             plain_token = decrypt_token(oauth_acc.encrypted_access_token)
-            await GmailSyncService.sync_user_inbox(db, current_user.id, plain_token)
+            await asyncio.wait_for(
+                GmailSyncService.sync_user_inbox(db, current_user.id, plain_token),
+                timeout=12.0
+            )
         except Exception as err:
-            print("[WritingStyle] Inbox sync error during style analysis:", err)
+            print("[WritingStyle] Inbox sync error/timeout during style analysis:", err)
 
     sent_stmt = select(Email).where(
         Email.user_id == current_user.id,

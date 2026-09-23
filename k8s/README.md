@@ -126,8 +126,8 @@ redis-5494d4d68c-mno90      1/1     Running   0          45s
 - **Via Ingress (Port 80)**: Open `http://localhost` in your browser.
 - **Via Direct Port-Forwarding**:
   ```bash
-  # Forward Frontend
-  kubectl port-forward -n flowinbox svc/frontend 3000:80
+  # Forward Frontend (accessible at http://localhost:8080 or http://localhost:3000)
+  kubectl port-forward -n flowinbox svc/frontend 8080:80
 
   # Forward Backend API
   kubectl port-forward -n flowinbox svc/backend 8000:8000

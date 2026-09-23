@@ -10,8 +10,10 @@ from pydantic import BaseModel
 
 from app.db.session import get_db
 from app.models.user import ApiToken, User
+from app.core.security import get_optional_current_user
 
 router = APIRouter(prefix="/api-tokens", tags=["API Tokens"])
+
 
 
 class CreateTokenSchema(BaseModel):
@@ -31,8 +33,20 @@ class CreatedTokenResponse(TokenSchema):
 
 
 @router.get("", response_model=List[TokenSchema])
-async def list_api_tokens(user_id: Optional[str] = None, db: AsyncSession = Depends(get_db)):
-    u_uuid = uuid.UUID(user_id) if user_id else uuid.UUID("00000000-0000-0000-0000-000000000001")
+async def list_api_tokens(
+    user_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
+    if user_id:
+        u_uuid = uuid.UUID(user_id)
+    elif current_user:
+        u_uuid = current_user.id
+    else:
+        stmt = select(User).order_by(User.created_at.asc())
+        res = await db.execute(stmt)
+        first_user = res.scalars().first()
+        u_uuid = first_user.id if first_user else uuid.UUID("00000000-0000-0000-0000-000000000001")
     
     stmt = select(ApiToken).where(ApiToken.user_id == u_uuid, ApiToken.revoked_at.is_(None)).order_by(ApiToken.created_at.desc())
     res = await db.execute(stmt)
@@ -51,15 +65,34 @@ async def list_api_tokens(user_id: Optional[str] = None, db: AsyncSession = Depe
 
 
 @router.post("", response_model=CreatedTokenResponse)
-async def create_api_token(body: CreateTokenSchema, user_id: Optional[str] = None, db: AsyncSession = Depends(get_db)):
-    u_uuid = uuid.UUID(user_id) if user_id else uuid.UUID("00000000-0000-0000-0000-000000000001")
+async def create_api_token(
+    body: CreateTokenSchema,
+    user_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
+    if user_id:
+        u_uuid = uuid.UUID(user_id)
+    elif current_user:
+        u_uuid = current_user.id
+    else:
+        stmt = select(User).order_by(User.created_at.asc())
+        res = await db.execute(stmt)
+        first_user = res.scalars().first()
+        u_uuid = first_user.id if first_user else uuid.UUID("00000000-0000-0000-0000-000000000001")
 
     # Ensure user exists
     user = await db.get(User, u_uuid)
     if not user:
-        user = User(id=u_uuid, email="user@flowinbox.ai", full_name="FlowInbox User")
-        db.add(user)
-        await db.flush()
+        stmt = select(User).where(User.email == "user@flowinbox.ai")
+        res = await db.execute(stmt)
+        user = res.scalars().first()
+        if user:
+            u_uuid = user.id
+        else:
+            user = User(id=u_uuid, email="user@flowinbox.ai", full_name="FlowInbox User")
+            db.add(user)
+            await db.flush()
 
     raw_token = f"fl_token_{secrets.token_urlsafe(32)}"
     token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
@@ -83,8 +116,14 @@ async def create_api_token(body: CreateTokenSchema, user_id: Optional[str] = Non
     }
 
 
+
 @router.delete("/{token_id}")
-async def revoke_api_token(token_id: str, db: AsyncSession = Depends(get_db)):
+async def revoke_api_token(
+    token_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
+
     t_uuid = uuid.UUID(token_id)
     token_entry = await db.get(ApiToken, t_uuid)
     if not token_entry:
@@ -94,3 +133,4 @@ async def revoke_api_token(token_id: str, db: AsyncSession = Depends(get_db)):
     await db.commit()
 
     return {"status": "revoked", "id": token_id}
+

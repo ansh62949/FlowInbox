@@ -35,13 +35,31 @@ class NeedsReplyEngine:
                 "urgency": "low"
             }
 
+        # Check heuristic for automated notifications / newsletters
+        subj = (thread.subject or "").lower()
+        snip = (thread.snippet or "").lower()
+        sender = (latest_email.sender_email or "").lower()
+
+        is_automated = any(kw in subj or kw in snip or kw in sender for kw in [
+            "newsletter", "unsubscribe", "no-reply", "noreply", "receipt", "order confirmation", "promotions", "notification"
+        ])
+
+        if is_automated:
+            return {
+                "needs_reply": False,
+                "confidence": 0.95,
+                "reason": "Automated notification, receipt, or newsletter",
+                "urgency": "low"
+            }
+
         # Prompt LLM for structured classification
         prompt = (
-            f"Analyze this incoming email and classify whether it requires a reply from the recipient.\n\n"
+            f"Analyze this incoming conversation thread and classify whether a direct human reply is required from the user.\n"
+            f"Note: Newsletters, automated order receipts, promotional marketing emails, and automated alerts do NOT require a reply even if they contain questions.\n\n"
             f"Subject: {thread.subject}\n"
             f"Sender: {latest_email.sender} ({latest_email.sender_email})\n"
             f"Snippet: {thread.snippet or latest_email.body_text[:200]}\n\n"
-            f"Respond with JSON format only:\n"
+            f"Respond with valid JSON format only:\n"
             f"{{\n"
             f'  "needs_reply": true/false,\n'
             f'  "confidence": 0.0-1.0,\n'
@@ -59,13 +77,11 @@ class NeedsReplyEngine:
             return data
         except Exception:
             # Fallback heuristic
-            subj = (thread.subject or "").lower()
-            snip = (thread.snippet or "").lower()
-            is_question = "?" in snip or "interview" in subj or "application" in subj or "schedule" in subj
+            is_actionable = "?" in snip or any(kw in subj or kw in snip for kw in ["interview", "application", "schedule", "meeting", "confirm", "follow up", "availability"])
             return {
-                "needs_reply": is_question,
+                "needs_reply": is_actionable,
                 "confidence": 0.85,
-                "reason": "Inferred from direct question or schedule keywords" if is_question else "Routine notification",
+                "reason": "Inferred from actionable keywords or direct request" if is_actionable else "Routine notification",
                 "urgency": "high" if "urgent" in subj or "interview" in subj else "medium"
             }
 
