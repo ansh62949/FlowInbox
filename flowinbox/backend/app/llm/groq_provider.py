@@ -42,7 +42,7 @@ class GroqProvider(LLMProvider):
         candidate_models = []
         if active_model:
             candidate_models.append(active_model)
-        for m in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"]:
+        for m in ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama3-70b-8192", "llama3-8b-8192", "gemma2-9b-it"]:
             if m not in candidate_models:
                 candidate_models.append(m)
 

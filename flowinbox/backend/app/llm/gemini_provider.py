@@ -32,7 +32,7 @@ class GeminiProvider(LLMProvider):
             candidate_models.append(self.model)
             if self.model.startswith("models/"):
                 candidate_models.append(self.model.replace("models/", ""))
-        for m in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]:
+        for m in ["gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]:
             if m not in candidate_models:
                 candidate_models.append(m)
 
