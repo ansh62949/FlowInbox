@@ -17,7 +17,9 @@ class Settings(BaseSettings):
     
     # Vector Store
     QDRANT_URL: str = "http://localhost:6333"
+    QDRANT_API_KEY: Optional[str] = None
     VECTOR_STORE: str = "qdrant"  # "qdrant" or "chroma"
+
     
     # LLM Providers
     LLM_PROVIDER: str = "groq"
