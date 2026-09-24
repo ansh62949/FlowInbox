@@ -5,6 +5,7 @@ import AppShell from './components/layout/AppShell';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import OnboardingPage from './pages/OnboardingPage';
+import PrivacyPage from './pages/PrivacyPage';
 
 import InboxPage from './pages/InboxPage';
 import ThreadDetailPage from './pages/ThreadDetailPage';
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/signin" element={<LoginPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
 
         {/* Workspace Application Routes wrapped in AppShell & RequireOnboarding */}
         <Route
