@@ -21,3 +21,11 @@ async def test_health_check_endpoint(async_client: AsyncClient):
     assert "status" in data
     assert "project" in data
     assert data["project"] == "FlowInbox AI"
+
+
+@pytest.mark.asyncio
+async def test_health_check_head_endpoint(async_client: AsyncClient):
+    """Test health check endpoint accepts HEAD requests for uptime monitors."""
+    response = await async_client.head("/api/v1/health")
+    assert response.status_code == 200
+
