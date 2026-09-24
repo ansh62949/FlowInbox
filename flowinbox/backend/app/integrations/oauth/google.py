@@ -28,9 +28,12 @@ class GoogleOAuthService:
             "https://www.googleapis.com/auth/calendar.events"
         ]
 
+        client_id = settings.GOOGLE_CLIENT_ID.strip() if settings.GOOGLE_CLIENT_ID else ""
+        redirect_uri = settings.GOOGLE_REDIRECT_URI.strip() if settings.GOOGLE_REDIRECT_URI else ""
+
         params = {
-            "client_id": settings.GOOGLE_CLIENT_ID,
-            "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
             "response_type": "code",
             "scope": " ".join(scopes),
             "access_type": "offline",
@@ -45,13 +48,18 @@ class GoogleOAuthService:
     async def exchange_code_for_tokens(code: str) -> Dict[str, Any]:
         """Exchange authorization code for access and refresh tokens."""
         token_url = "https://oauth2.googleapis.com/token"
+        client_id = settings.GOOGLE_CLIENT_ID.strip() if settings.GOOGLE_CLIENT_ID else ""
+        client_secret = settings.GOOGLE_CLIENT_SECRET.strip() if settings.GOOGLE_CLIENT_SECRET else ""
+        redirect_uri = settings.GOOGLE_REDIRECT_URI.strip() if settings.GOOGLE_REDIRECT_URI else ""
+
         payload = {
-            "client_id": settings.GOOGLE_CLIENT_ID,
-            "client_secret": settings.GOOGLE_CLIENT_SECRET,
+            "client_id": client_id,
+            "client_secret": client_secret,
             "code": code,
             "grant_type": "authorization_code",
-            "redirect_uri": settings.GOOGLE_REDIRECT_URI
+            "redirect_uri": redirect_uri
         }
+
         
         # If running in mock/test mode without valid credentials, return mock tokens
         if settings.GOOGLE_CLIENT_ID == "mock_client_id":
