@@ -17,10 +17,26 @@ from app.integrations.gmail.sync import GmailSyncService
 router = APIRouter(prefix="/inbox", tags=["Inbox"])
 
 
-async def _bg_sync_inbox(user_id: uuid.UUID, plain_token: str):
+async def _bg_sync_inbox(user_id: uuid.UUID):
     try:
         async with AsyncSessionLocal() as bg_db:
-            await GmailSyncService.sync_user_inbox(bg_db, user_id, plain_token)
+            oauth_acc = await _get_oauth_account(bg_db, user_id)
+            if not oauth_acc:
+                return
+            plain_token = decrypt_token(oauth_acc.encrypted_access_token)
+            try:
+                await GmailSyncService.sync_user_inbox(bg_db, user_id, plain_token)
+            except Exception as sync_err:
+                if oauth_acc.encrypted_refresh_token:
+                    ref_token = decrypt_token(oauth_acc.encrypted_refresh_token)
+                    new_tokens = await GoogleOAuthService.refresh_access_token(ref_token)
+                    if new_tokens and "access_token" in new_tokens:
+                        fresh_access = new_tokens["access_token"]
+                        oauth_acc.encrypted_access_token = encrypt_token(fresh_access)
+                        await bg_db.commit()
+                        await GmailSyncService.sync_user_inbox(bg_db, user_id, fresh_access)
+                else:
+                    raise sync_err
     except Exception as err:
         print("[InboxAPI] Background sync error:", err)
 
@@ -89,8 +105,7 @@ async def list_threads(
     oauth_acc = await _get_oauth_account(db, target_user.id)
     if oauth_acc:
         try:
-            plain_token = decrypt_token(oauth_acc.encrypted_access_token)
-            asyncio.create_task(_bg_sync_inbox(target_user.id, plain_token))
+            asyncio.create_task(_bg_sync_inbox(target_user.id))
         except Exception as err:
             print("[InboxAPI] Background sync dispatch error:", err)
 
