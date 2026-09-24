@@ -1,4 +1,4 @@
-const API_BASE = '/api/v1';
+export const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/+$/, '');
 
 async function request(endpoint, options = {}) {
   const token = localStorage.getItem('flowinbox_token');
@@ -14,8 +14,10 @@ async function request(endpoint, options = {}) {
     headers,
   };
 
+  const formattedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   try {
-    const res = await fetch(`${API_BASE}${endpoint}`, config);
+    const res = await fetch(`${API_BASE}${formattedEndpoint}`, config);
+
     if (!res.ok) {
       let errorDetail = res.statusText;
       try {
