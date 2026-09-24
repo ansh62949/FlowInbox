@@ -38,13 +38,13 @@ Add the following environment variables in the Render Dashboard (**Environment**
 | `OAUTH_TOKEN_ENCRYPTION_KEY` | 32-character key for Fernet token encryption | `secret_key_32_bytes_long_for_fernet!!` |
 | `GOOGLE_CLIENT_ID` | Google Cloud OAuth Client ID | `13849...apps.googleusercontent.com` |
 | `GOOGLE_CLIENT_SECRET` | Google Cloud OAuth Client Secret | `GOCSPX-...` |
-| `GOOGLE_REDIRECT_URI` | Exact backend OAuth callback URL | `https://flowinbox-backend.onrender.com/api/v1/auth/google/callback` |
-| `FRONTEND_URL` | Live Vercel Frontend URL | `https://flowinbox.vercel.app` |
-| `FRONTEND_ORIGINS` | Allowed CORS Origins | `https://flowinbox.vercel.app` |
+| `GOOGLE_REDIRECT_URI` | Exact backend OAuth callback URL | `https://flowinbox.onrender.com/api/v1/auth/google/callback` |
+| `FRONTEND_URL` | Live Vercel Frontend URL | `https://flow-inbox.vercel.app` |
+| `FRONTEND_ORIGINS` | Allowed CORS Origins | `https://flow-inbox.vercel.app` |
 | `ENABLE_GMAIL_SYNC` | Background email sync flag | `true` |
 
 > ⚠️ **Critical OAuth Setup Step:**
-> In your [Google Cloud Console](https://console.cloud.google.com/apis/credentials), select your OAuth 2.0 Client ID and add `https://flowinbox-backend.onrender.com/api/v1/auth/google/callback` under **Authorized Redirect URIs**. Without this exact URI, Google OAuth login will fail with `redirect_uri_mismatch`.
+> In your [Google Cloud Console](https://console.cloud.google.com/apis/credentials), select your OAuth 2.0 Client ID and add `https://flowinbox.onrender.com/api/v1/auth/google/callback` under **Authorized Redirect URIs**. Without this exact URI, Google OAuth login will fail with `redirect_uri_mismatch`.
 
 ---
 
@@ -61,7 +61,8 @@ Add the following environment variables in the Render Dashboard (**Environment**
 
 | Variable Key | Value |
 | :--- | :--- |
-| `VITE_API_BASE_URL` | `https://flowinbox-backend.onrender.com/api/v1` |
+| `VITE_API_BASE_URL` | `https://flowinbox.onrender.com/api/v1` |
+
 
 5. Click **Deploy**. Vercel will build and host your production React application. Client-side route rewrites are pre-configured via [`vercel.json`](file:///c:/Users/satam/OneDrive/Desktop/ai-engineering-bootcamp-prerequisites-1/flowinbox/frontend/vercel.json).
 
