@@ -54,29 +54,31 @@ export const api = {
   },
 
   post: (endpoint, body, opts = {}) => {
-    const params = opts && opts.params ? opts.params : (opts && !opts.params && typeof opts === 'object' && !Array.isArray(opts) ? opts : {});
-    const url = (opts && opts.params) ? buildUrl(endpoint, opts.params) : (typeof opts === 'object' && Object.keys(opts).length > 0 && !opts.headers ? buildUrl(endpoint, opts) : endpoint);
+    const { params, ...fetchOpts } = opts || {};
+    const url = params ? buildUrl(endpoint, params) : endpoint;
     return request(url, {
       method: 'POST',
       body: body ? JSON.stringify(body) : undefined,
-      ...opts,
+      ...fetchOpts,
     });
   },
 
   put: (endpoint, body, opts = {}) => {
-    const url = (opts && opts.params) ? buildUrl(endpoint, opts.params) : endpoint;
+    const { params, ...fetchOpts } = opts || {};
+    const url = params ? buildUrl(endpoint, params) : endpoint;
     return request(url, {
       method: 'PUT',
       body: body ? JSON.stringify(body) : undefined,
-      ...opts,
+      ...fetchOpts,
     });
   },
 
   delete: (endpoint, opts = {}) => {
-    const url = (opts && opts.params) ? buildUrl(endpoint, opts.params) : endpoint;
+    const { params, ...fetchOpts } = opts || {};
+    const url = params ? buildUrl(endpoint, params) : endpoint;
     return request(url, {
       method: 'DELETE',
-      ...opts,
+      ...fetchOpts,
     });
   },
 };

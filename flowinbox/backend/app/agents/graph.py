@@ -81,6 +81,8 @@ async def planner_node(state: FlowInboxState) -> FlowInboxState:
 
 async def agent_tool_loop_node(state: FlowInboxState) -> FlowInboxState:
     """Execute tools and call LLM to dynamically generate responses/drafts from retrieved context with graceful fallback."""
+    from app.core.config import settings
+    frontend_url = settings.FRONTEND_URL.rstrip('/')
     intent = state["intent"]
     user_id = state["user_id"]
     req = state["request"]
