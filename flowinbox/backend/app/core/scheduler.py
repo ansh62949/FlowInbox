@@ -1,12 +1,14 @@
 import asyncio
 import logging
 from sqlalchemy import select
+from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.models.user import OAuthAccount
 from app.core.security import decrypt_token
 from app.integrations.gmail.sync import GmailSyncService
 
 logger = logging.getLogger("flowinbox.core.scheduler")
+
 
 _scheduler_task: asyncio.Task = None
 _scheduler_running: bool = False

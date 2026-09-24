@@ -20,9 +20,22 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+import re
+
+def sanitize_db_url(url: str) -> str:
+    """Sanitize postgresql+asyncpg database URL by converting libpq sslmode params."""
+    if "asyncpg" in url and "sslmode=" in url:
+        url = url.replace("sslmode=require", "ssl=require")
+        url = url.replace("sslmode=prefer", "ssl=prefer")
+        url = url.replace("sslmode=disable", "ssl=disable")
+        url = url.replace("sslmode=verify-full", "ssl=verify-full")
+        url = re.sub(r'[\?&]sslmode=[^&]+', '', url)
+    return url
+
 # Fallback to application settings if sqlalchemy.url is not explicitly set
-if not config.get_main_option("sqlalchemy.url"):
-    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+target_url = config.get_main_option("sqlalchemy.url") or settings.DATABASE_URL
+config.set_main_option("sqlalchemy.url", sanitize_db_url(target_url))
+
 
 
 
