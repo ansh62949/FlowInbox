@@ -29,17 +29,17 @@ jobs:
       - name: Run Pytest Test Suite
         working-directory: flowinbox/backend
         env:
-          PYTHONPATH: .
-          ENVIRONMENT: test
-          DATABASE_URL: sqlite+aiosqlite:///:memory:
-          REDIS_URL: redis://localhost:6379/0
-          VECTOR_STORE: chroma
-          EMBEDDING_PROVIDER: fastembed
-          LLM_PROVIDER: groq
-          GROQ_API_KEY: mock_groq_key_12345
-          GEMINI_API_KEY: mock_gemini_key_12345
-          JWT_SECRET: super_secret_jwt_key_for_dev_mode_only
-          OAUTH_TOKEN_ENCRYPTION_KEY: secret_key_32_bytes_long_for_fernet!!
+          PYTHONPATH: "."
+          ENVIRONMENT: "test"
+          DATABASE_URL: "sqlite+aiosqlite:///:memory:"
+          REDIS_URL: "redis://localhost:6379/0"
+          VECTOR_STORE: "chroma"
+          EMBEDDING_PROVIDER: "fastembed"
+          LLM_PROVIDER: "groq"
+          GROQ_API_KEY: "mock_groq_key_12345"
+          GEMINI_API_KEY: "mock_gemini_key_12345"
+          JWT_SECRET: "super_secret_jwt_key_for_dev_mode_only"
+          OAUTH_TOKEN_ENCRYPTION_KEY: "secret_key_32_bytes_long_for_fernet!!"
         run: |
           python -m pytest tests/
 
