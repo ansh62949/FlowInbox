@@ -45,7 +45,7 @@ class GroqProvider(LLMProvider):
         candidate_models = []
         if active_model:
             candidate_models.append(active_model)
-        for m in ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile", "llama3-70b-8192", "llama3-8b-8192"]:
+        for m in ["llama-3.3-70b-versatile", "llama-3.1-70b-versatile"]:
             if m not in candidate_models:
                 candidate_models.append(m)
 
@@ -71,12 +71,10 @@ class GroqProvider(LLMProvider):
                 }
             except Exception as e:
                 last_err = e
-                logger.warning(f"[GroqProvider] [LIVE] Model '{m}' failed ({str(e)}). Trying next candidate...")
+                err_msg = str(e).lower()
+                logger.warning(f"[GroqProvider] [LIVE] Model '{m}' failed ({str(e)}).")
+                if "401" in err_msg or "invalid api key" in err_msg or "unauthorized" in err_msg:
+                    logger.warning("[GroqProvider] Invalid Groq API key. Breaking candidate loop.")
+                    break
 
-        return {
-            "content": f"Information retrieved from user inbox. (Groq API Notice: {str(last_err)})",
-            "tool_calls": [],
-            "provider": "groq",
-            "model": "error",
-            "error": str(last_err)
-        }
+        raise RuntimeError(f"Groq API call failed: {str(last_err)}")
