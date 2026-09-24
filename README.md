@@ -5,6 +5,43 @@
 
 > **FlowInbox AI** is an AI-native workspace where people, teams, and autonomous AI agents collaborate together on email communications, thread triage, calendar scheduling, and workflow automation.
 
+🌐 **Live Application:** [https://flow-inbox.vercel.app](https://flow-inbox.vercel.app)  
+⚡ **Evaluator Quick Access:** Click **"Enter Demo Workspace"** on the sign-in page for instant 1-click access with pre-populated demo threads—zero setup or personal Gmail login required!
+
+---
+
+## 🔒 Enterprise OAuth 2.0 Security & Dual Access Architecture
+
+FlowInbox AI is engineered with production-grade security, row-level multi-tenant user isolation, and encrypted OAuth credential management.
+
+### Google OAuth 2.0 & Token Exchange Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant React as Frontend (Vite / React)
+    participant API as FastAPI Backend
+    participant Google as Google OAuth 2.0 API
+    participant DB as PostgreSQL Database
+
+    User->>React: Click "Continue with Google"
+    React->>API: GET /api/v1/auth/google/login
+    API-->>Google: Redirect with Client ID & Gmail Scopes
+    Google-->>User: Google OAuth Consent Screen
+    User->>Google: Authorize Permissions
+    Google-->>API: Callback GET /api/v1/auth/google/callback?code=...
+    API->>Google: POST /oauth2/v2/token (Exchange Code)
+    Google-->>API: Returns Access & Refresh Tokens
+    API->>DB: Upsert User & Store Encrypted Tokens (AES-GCM)
+    API-->>React: Set HttpOnly Cookie & Return Session JWT
+    API->>Google: Trigger Non-blocking Background Sync (Gmail REST API)
+```
+
+### Dual Access Modes for Seamless Evaluation
+1. **Live Google Workspace OAuth 2.0 Mode:** Full authentication with `gmail.readonly` and `gmail.compose` scopes, AES-GCM token encryption, refresh token rotation, and live inbox ingestion into PostgreSQL.
+2. **Guest Evaluator Mode (Demo Workspace):** Isolated session pre-populated with realistic demo threads (*Senior AI Engineer Role*, *Q3 Product Strategy*, *API Rate Limits*, *AI Newsletter*) enabling instant 1-click evaluation of all AI agents, writing tone analysis, and human-in-the-loop workflows.
+
 ---
 
 ## 🏗 System Architecture
@@ -38,13 +75,14 @@
 * **Agent Orchestration**: LangGraph StateGraph, Model Context Protocol (MCP)
 * **LLM Engine & Routing**: Groq (`llama-3.3-70b-versatile`) primary tool caller, Google Gemini fallback
 * **Vector Store & RAG**: Qdrant Vector Store, Dense Vector Embeddings + PostgreSQL Full-Text Search (FTS) merged via Reciprocal Rank Fusion (RRF)
+* **Security & Auth**: Google OAuth 2.0, AES-GCM Credential Encryption, JWT Sessions, Row-Level User Isolation
 * **Infrastructure**: Docker Compose, Kubernetes (`kind`), GitHub Actions CI/CD with GitHub Container Registry (GHCR)
 
 ---
 
 ## ✨ Key Features
 
-1. **Google Workspace Sync**: Direct OAuth 2.0 connection to live Gmail threads and Google Calendar events.
+1. **Google Workspace Sync & Dual Mode**: Direct OAuth 2.0 connection to live Gmail threads or 1-click Guest Demo mode.
 2. **Deep Email Analysis & Grounded Drafting**: One-click synthesis of intent, sender context, sentiment, urgency scores, and grounded reply options.
 3. **Human-in-the-Loop Safety Gate**: Consequential actions (`send_email`, `create_calendar_event`) generate a pending approval request requiring explicit human sign-off before dispatching.
 4. **Model Context Protocol (MCP)**: Native stdio and HTTP SSE endpoints allowing external tools (Claude Desktop, Cursor IDE) to query inbox tools directly.
