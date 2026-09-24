@@ -18,16 +18,31 @@ class GeminiProvider(LLMProvider):
         logger.info(f"[GeminiProvider] Initialized in {mode_str} mode (model: {self.model})")
 
     def _get_active_model(self) -> str:
-        return self.model or "gemini-1.5-flash"
+        model = self.model or "gemini-1.5-flash"
+        if "2.5" in model:
+            return "gemini-1.5-flash"
+        return model
 
     def _call_gemini_sync(self, contents: str) -> Dict[str, Any]:
         from google import genai
         client = genai.Client(api_key=self.api_key)
         active_model = self._get_active_model()
-        res = client.models.generate_content(
-            model=active_model,
-            contents=contents
-        )
+        try:
+            res = client.models.generate_content(
+                model=active_model,
+                contents=contents
+            )
+        except Exception as err:
+            err_msg = str(err)
+            if "not_found" in err_msg.lower() or "404" in err_msg or "not available" in err_msg.lower():
+                logger.warning(f"[GeminiProvider] Model '{active_model}' returned 404 ({err_msg}). Retrying with 'gemini-1.5-flash'...")
+                res = client.models.generate_content(
+                    model="gemini-1.5-flash",
+                    contents=contents
+                )
+            else:
+                raise err
+
         content = res.text or ""
         usage = getattr(res, "usage_metadata", None)
         prompt_tokens = getattr(usage, "prompt_token_count", 0) if usage else 0
