@@ -225,11 +225,20 @@ async def agent_tool_loop_node(state: FlowInboxState) -> FlowInboxState:
 
         try:
             llm_res = await llm_manager.generate([{"role": "user", "content": prompt}])
-            state["final_response"] = llm_res.get("content", "").strip()
+            resp_text = llm_res.get("content", "").strip()
+            if "LLM Provider Notice" in resp_text and res.emails:
+                email_links = "\n".join([f"- **[{e.get('subject', 'No Subject')}]({frontend_url}/inbox?thread={e.get('id')})** — From: {e.get('sender')} | *{e.get('snippet', '')[:120]}*" for e in res.emails[:5]])
+                state["final_response"] = f"### 📬 Inbox Search Results ({len(res.emails)})\n\nFound **{len(res.emails)}** relevant emails for *'{req}'*:\n\n{email_links}"
+            else:
+                state["final_response"] = resp_text
         except Exception as e:
             logger.error(f"[AgentToolLoop] LLM call failed for general query: {str(e)}", exc_info=True)
             state["errors"].append(f"LLM general query error: {str(e)}")
-            state["final_response"] = f"Searched inbox for '{req}' and found {len(res.emails)} matching emails. (LLM Provider Error: {str(e)})"
+            if res.emails:
+                email_links = "\n".join([f"- **[{e.get('subject', 'No Subject')}]({frontend_url}/inbox?thread={e.get('id')})** — From: {e.get('sender')} | *{e.get('snippet', '')[:120]}*" for e in res.emails[:5]])
+                state["final_response"] = f"### 📥 Inbox Search Results ({len(res.emails)})\n\nFound **{len(res.emails)}** relevant emails for *'{req}'*:\n\n{email_links}"
+            else:
+                state["final_response"] = f"Searched inbox for '{req}', but 0 matching emails were found."
 
     return state
 

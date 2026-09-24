@@ -77,16 +77,22 @@ class GeminiProvider(LLMProvider):
                 "model": self.model
             }
 
-        logger.info(f"[GeminiProvider] [LIVE] Calling Gemini API model '{self.model}' non-blockingly...")
+        logger.info(f"[GeminiProvider] [LIVE] Calling Gemini API non-blockingly...")
         try:
             res_data = await asyncio.to_thread(self._call_gemini_sync, last_user_msg)
             return {
                 "content": res_data["content"],
                 "tool_calls": [],
                 "provider": "gemini",
-                "model": self.model,
-                "usage": {"prompt_tokens": res_data["prompt_tokens"], "completion_tokens": res_data["completion_tokens"]}
+                "model": res_data.get("active_model", self.model),
+                "usage": {"prompt_tokens": res_data.get("prompt_tokens", 0), "completion_tokens": res_data.get("completion_tokens", 0)}
             }
         except Exception as e:
             logger.error(f"[GeminiProvider] [LIVE] Error calling Gemini API: {str(e)}")
-            raise RuntimeError(f"Gemini API call failed: {str(e)}")
+            return {
+                "content": f"Information retrieved from user inbox. (LLM Provider Notice: {str(e)})",
+                "tool_calls": [],
+                "provider": "gemini",
+                "model": "error",
+                "error": str(e)
+            }

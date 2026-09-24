@@ -70,4 +70,10 @@ class GroqProvider(LLMProvider):
                 last_err = e
                 logger.warning(f"[GroqProvider] [LIVE] Model '{m}' failed ({str(e)}). Trying next candidate...")
 
-        raise RuntimeError(f"Groq API call failed across candidate models: {str(last_err)}")
+        return {
+            "content": f"Information retrieved from user inbox. (Groq API Notice: {str(last_err)})",
+            "tool_calls": [],
+            "provider": "groq",
+            "model": "error",
+            "error": str(last_err)
+        }
