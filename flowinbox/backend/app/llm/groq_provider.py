@@ -18,7 +18,10 @@ class GroqProvider(LLMProvider):
         logger.info(f"[GroqProvider] Initialized in {mode_str} mode (model: {self.model})")
 
     def _get_active_model(self) -> str:
-        return self.model or "llama-3.3-70b-versatile"
+        model = self.model or "llama-3.3-70b-versatile"
+        if "qwen" in model.lower() or "mock" in model.lower() or "/" in model:
+            return "llama-3.3-70b-versatile"
+        return model
 
     async def generate_response(
         self,
