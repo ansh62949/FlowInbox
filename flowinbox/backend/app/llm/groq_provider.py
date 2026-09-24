@@ -39,23 +39,35 @@ class GroqProvider(LLMProvider):
                 "model": active_model
             }
 
-        logger.info(f"[GroqProvider] [LIVE] Calling Groq API model '{active_model}'...")
-        try:
-            from groq import AsyncGroq
-            client = AsyncGroq(api_key=self.api_key)
-            res = await client.chat.completions.create(
-                model=active_model,
-                messages=messages,
-                temperature=temperature
-            )
-            content = res.choices[0].message.content
-            logger.info(f"[GroqProvider] [LIVE] Success! Received {len(content)} chars.")
-            return {
-                "content": content,
-                "tool_calls": [],
-                "provider": "groq",
-                "model": self.model
-            }
-        except Exception as e:
-            logger.error(f"[GroqProvider] [LIVE] Error calling Groq API: {str(e)}")
-            raise RuntimeError(f"Groq API call failed: {str(e)}")
+        candidate_models = []
+        if active_model:
+            candidate_models.append(active_model)
+        for m in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"]:
+            if m not in candidate_models:
+                candidate_models.append(m)
+
+        from groq import AsyncGroq
+        client = AsyncGroq(api_key=self.api_key)
+
+        last_err = None
+        for m in candidate_models:
+            try:
+                logger.info(f"[GroqProvider] [LIVE] Calling Groq API model '{m}'...")
+                res = await client.chat.completions.create(
+                    model=m,
+                    messages=messages,
+                    temperature=temperature
+                )
+                content = res.choices[0].message.content
+                logger.info(f"[GroqProvider] [LIVE] Success with model '{m}'! Received {len(content)} chars.")
+                return {
+                    "content": content,
+                    "tool_calls": [],
+                    "provider": "groq",
+                    "model": m
+                }
+            except Exception as e:
+                last_err = e
+                logger.warning(f"[GroqProvider] [LIVE] Model '{m}' failed ({str(e)}). Trying next candidate...")
+
+        raise RuntimeError(f"Groq API call failed across candidate models: {str(last_err)}")

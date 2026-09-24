@@ -26,33 +26,38 @@ class GeminiProvider(LLMProvider):
     def _call_gemini_sync(self, contents: str) -> Dict[str, Any]:
         from google import genai
         client = genai.Client(api_key=self.api_key)
-        active_model = self._get_active_model()
-        try:
-            res = client.models.generate_content(
-                model=active_model,
-                contents=contents
-            )
-        except Exception as err:
-            err_msg = str(err)
-            if "not_found" in err_msg.lower() or "404" in err_msg or "not available" in err_msg.lower():
-                logger.warning(f"[GeminiProvider] Model '{active_model}' returned 404 ({err_msg}). Retrying with 'gemini-1.5-flash'...")
+
+        candidate_models = []
+        if self.model:
+            candidate_models.append(self.model)
+            if self.model.startswith("models/"):
+                candidate_models.append(self.model.replace("models/", ""))
+        for m in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]:
+            if m not in candidate_models:
+                candidate_models.append(m)
+
+        last_err = None
+        for active_model in candidate_models:
+            try:
                 res = client.models.generate_content(
-                    model="gemini-1.5-flash",
+                    model=active_model,
                     contents=contents
                 )
-            else:
-                raise err
+                content = res.text or ""
+                usage = getattr(res, "usage_metadata", None)
+                prompt_tokens = getattr(usage, "prompt_token_count", 0) if usage else 0
+                completion_tokens = getattr(usage, "candidates_token_count", 0) if usage else 0
+                logger.info(f"[GeminiProvider] [LIVE] Success with model '{active_model}'! Received {len(content)} chars.")
+                return {
+                    "content": content,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens
+                }
+            except Exception as err:
+                last_err = err
+                logger.warning(f"[GeminiProvider] Model '{active_model}' failed ({str(err)}). Trying next candidate...")
 
-        content = res.text or ""
-        usage = getattr(res, "usage_metadata", None)
-        prompt_tokens = getattr(usage, "prompt_token_count", 0) if usage else 0
-        completion_tokens = getattr(usage, "candidates_token_count", 0) if usage else 0
-        logger.info(f"[GeminiProvider] [LIVE] Success! Received {len(content)} chars (tokens: prompt={prompt_tokens}, completion={completion_tokens}).")
-        return {
-            "content": content,
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens
-        }
+        raise RuntimeError(f"Gemini API call failed across candidates: {str(last_err)}")
 
     async def generate_response(
         self,
