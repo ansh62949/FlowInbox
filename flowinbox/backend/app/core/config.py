@@ -1,5 +1,5 @@
-import os
-from typing import Optional
+from typing import Optional, Union, List
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -45,8 +45,28 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
     
     # Security
-    FRONTEND_URL: str = "http://localhost:8080"
-    FRONTEND_ORIGINS: list[str] = ["http://localhost:8080", "http://localhost:5173", "http://localhost:3000"]
+    FRONTEND_URL: str = "https://flow-inbox.vercel.app"
+    FRONTEND_ORIGINS: Union[List[str], str] = [
+        "http://localhost:8080",
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://flow-inbox.vercel.app"
+    ]
+
+    @field_validator("FRONTEND_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
+        if isinstance(v, str):
+            if v.startswith("[") and v.endswith("]"):
+                import json
+                try:
+                    return json.loads(v)
+                except Exception:
+                    pass
+            return [i.strip().rstrip("/") for i in v.split(",") if i.strip()]
+        elif isinstance(v, list):
+            return [str(i).strip().rstrip("/") for i in v]
+        return v
 
     JWT_SECRET: str = "super_secret_jwt_key_for_dev_mode_only"
 
@@ -62,3 +82,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

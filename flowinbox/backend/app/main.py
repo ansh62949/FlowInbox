@@ -47,10 +47,16 @@ app = FastAPI(
 )
 
 # CORS Middleware configuration
+cors_origins = list(settings.FRONTEND_ORIGINS) if isinstance(settings.FRONTEND_ORIGINS, list) else [settings.FRONTEND_ORIGINS]
+if settings.FRONTEND_URL and settings.FRONTEND_URL.rstrip("/") not in cors_origins:
+    cors_origins.append(settings.FRONTEND_URL.rstrip("/"))
+if "https://flow-inbox.vercel.app" not in cors_origins:
+    cors_origins.append("https://flow-inbox.vercel.app")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.FRONTEND_ORIGINS if isinstance(settings.FRONTEND_ORIGINS, list) else [settings.FRONTEND_ORIGINS],
-    allow_origin_regex=r"http://.*" if settings.ENVIRONMENT == "development" else None,
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app|http://localhost:\d+|http://127\.0\.0\.1:\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
