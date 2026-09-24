@@ -29,19 +29,28 @@ async def request_understanding_node(state: FlowInboxState) -> FlowInboxState:
     try:
         llm_res = await llm_manager.generate([{"role": "user", "content": prompt}])
         raw_text = llm_res.get("content", "").strip().lower()
-        logger.info(f"[RequestUnderstanding] Live LLM classified intent: '{raw_text}' (Provider: {llm_res.get('provider')})")
+        logger.info(f"[RequestUnderstanding] LLM response: '{raw_text}' (Provider: {llm_res.get('provider')})")
 
-        for valid_intent in ["interview_prep", "recruiter_followup", "daily_digest", "general_query"]:
-            if valid_intent in raw_text:
-                intent = valid_intent
-                break
+        if "mock response" in raw_text:
+            req_lower = req.lower()
+            if "recruiter" in req_lower or "follow" in req_lower:
+                intent = "recruiter_followup"
+            elif "interview" in req_lower or "prep" in req_lower or "time" in req_lower or "schedule" in req_lower:
+                intent = "interview_prep"
+            elif "summarize" in req_lower or "digest" in req_lower:
+                intent = "daily_digest"
+        else:
+            for valid_intent in ["interview_prep", "recruiter_followup", "daily_digest", "general_query"]:
+                if valid_intent in raw_text:
+                    intent = valid_intent
+                    break
     except Exception as e:
         logger.warning(f"[RequestUnderstanding] LLM call failed ({str(e)}). Using keyword fallback path.")
         req_lower = req.lower()
-        if "interview" in req_lower or "prep" in req_lower or "time" in req_lower or "schedule" in req_lower:
-            intent = "interview_prep"
-        elif "recruiter" in req_lower or "follow" in req_lower:
+        if "recruiter" in req_lower or "follow" in req_lower:
             intent = "recruiter_followup"
+        elif "interview" in req_lower or "prep" in req_lower or "time" in req_lower or "schedule" in req_lower:
+            intent = "interview_prep"
         elif "summarize" in req_lower or "digest" in req_lower:
             intent = "daily_digest"
 

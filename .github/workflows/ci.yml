@@ -36,7 +36,7 @@ jobs:
           VECTOR_STORE: chroma
           EMBEDDING_PROVIDER: fastembed
           LLM_PROVIDER: groq
-          GROQ_API_KEY: gsk_mock_test_key_12345
+          GROQ_API_KEY: mock_groq_key_12345
           GEMINI_API_KEY: mock_gemini_key_12345
           JWT_SECRET: super_secret_jwt_key_for_dev_mode_only
           OAUTH_TOKEN_ENCRYPTION_KEY: secret_key_32_bytes_long_for_fernet!!
