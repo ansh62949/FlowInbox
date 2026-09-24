@@ -76,6 +76,32 @@ class GoogleOAuthService:
             return res.json()
 
     @staticmethod
+    async def refresh_access_token(refresh_token: str) -> Optional[Dict[str, Any]]:
+        """Exchange refresh_token for a fresh Google OAuth access token."""
+        if not refresh_token or refresh_token.startswith("mock_"):
+            return None
+
+        token_url = "https://oauth2.googleapis.com/token"
+        client_id = settings.GOOGLE_CLIENT_ID.strip() if settings.GOOGLE_CLIENT_ID else ""
+        client_secret = settings.GOOGLE_CLIENT_SECRET.strip() if settings.GOOGLE_CLIENT_SECRET else ""
+
+        payload = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token",
+        }
+
+        try:
+            async with httpx.AsyncClient() as client:
+                res = await client.post(token_url, data=payload, timeout=10.0)
+                if res.status_code == 200:
+                    return res.json()
+                return None
+        except Exception:
+            return None
+
+    @staticmethod
     async def get_user_info(access_token: str) -> Dict[str, Any]:
         """Fetch user profile information from Google UserInfo API."""
         if access_token.startswith("mock_"):

@@ -26,9 +26,30 @@ async def _gmail_sync_loop(interval_seconds: int = 90):
                 res = await db.execute(stmt)
                 oauth_accounts = res.scalars().all()
 
+                from datetime import datetime, timezone, timedelta
+                from app.integrations.oauth.google import GoogleOAuthService
+                from app.core.security import encrypt_token
+
                 for acc in oauth_accounts:
                     try:
                         plain_token = decrypt_token(acc.encrypted_access_token)
+                        
+                        # Auto-refresh token if expired or about to expire in 5 minutes
+                        now = datetime.now(timezone.utc)
+                        if acc.encrypted_refresh_token and (not acc.expires_at or acc.expires_at <= now or (acc.expires_at - now).total_seconds() < 300):
+                            try:
+                                ref_token = decrypt_token(acc.encrypted_refresh_token)
+                                ref_res = await GoogleOAuthService.refresh_access_token(ref_token)
+                                if ref_res and "access_token" in ref_res:
+                                    plain_token = ref_res["access_token"]
+                                    acc.encrypted_access_token = encrypt_token(plain_token)
+                                    expires_in = ref_res.get("expires_in", 3600)
+                                    acc.expires_at = now + timedelta(seconds=expires_in)
+                                    await db.commit()
+                                    logger.info(f"[GmailScheduler] Automatically refreshed OAuth access token for user {acc.user_id}")
+                            except Exception as ref_err:
+                                logger.warning(f"[GmailScheduler] Token refresh failed for user {acc.user_id}: {str(ref_err)}")
+
                         count = await GmailSyncService.sync_user_inbox(db, acc.user_id, plain_token)
                         if count > 0:
                             logger.info(f"[GmailScheduler] Auto-synced {count} new message(s) for user {acc.user_id}")
