@@ -166,6 +166,50 @@ async def _seed_demo_threads_for_user(db: AsyncSession, user_id: uuid.UUID):
     await db.commit()
 
 
+@router.api_route("/demo", methods=["GET", "POST"])
+async def enter_demo_session(
+    response: Response,
+    db: AsyncSession = Depends(get_db)
+):
+    """Explicitly switch session to isolated Guest Evaluator demo account."""
+    stmt = select(User).where(User.email == "guest@flowinbox.ai")
+    res = await db.execute(stmt)
+    user = res.scalars().first()
+    if not user:
+        user = User(
+            email="guest@flowinbox.ai",
+            full_name="Guest Evaluator",
+            onboarding_completed_at=datetime.now(timezone.utc)
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        try:
+            await _seed_demo_threads_for_user(db, user.id)
+        except Exception as err:
+            logger.warning(f"[AuthDemo] Demo seeding error: {str(err)}")
+
+    jwt_token = create_access_token(user.id)
+    response.set_cookie(
+        key="flowinbox_session",
+        value=jwt_token,
+        httponly=True,
+        secure=settings.ENVIRONMENT == "production",
+        max_age=86400 * 7,
+        samesite="lax"
+    )
+
+    return {
+        "authenticated": True,
+        "access_token": jwt_token,
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "full_name": user.full_name
+        }
+    }
+
+
 @router.get("/me")
 async def get_current_user_me(
     response: Response,

@@ -6,6 +6,7 @@ export const authApi = {
   getWritingProfile: () => api.get('/auth/writing-profile'),
   updateWritingProfile: (data) => api.post('/auth/writing-profile', data),
   completeOnboarding: () => api.post('/auth/complete-onboarding'),
+  enterDemo: () => api.post('/auth/demo'),
   getLoginUrl: () => `${API_BASE}/auth/google/login`,
 };
 

@@ -9,7 +9,16 @@ export default function LoginPage() {
     window.location.href = authApi.getLoginUrl();
   };
 
-  const handleDemoAccess = () => {
+  const handleDemoAccess = async () => {
+    try {
+      localStorage.removeItem('flowinbox_token');
+      const demoRes = await authApi.enterDemo();
+      if (demoRes && demoRes.access_token) {
+        localStorage.setItem('flowinbox_token', demoRes.access_token);
+      }
+    } catch (e) {
+      console.warn('[LoginPage] Demo token fetch error:', e);
+    }
     navigate('/inbox');
   };
 
