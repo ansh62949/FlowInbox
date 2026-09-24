@@ -5,11 +5,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User, OAuthAccount
+from app.models.email import EmailThread
 from app.integrations.oauth.google import GoogleOAuthService
 from app.core.security import create_access_token, encrypt_token, get_optional_current_user, get_current_user
 from app.integrations.gmail.sync import GmailSyncService
@@ -166,6 +167,65 @@ async def _seed_demo_threads_for_user(db: AsyncSession, user_id: uuid.UUID):
     await db.commit()
 
 
+async def _process_oauth_callback(code: str, db: AsyncSession):
+    """Process OAuth code, exchange tokens, fetch profile, upsert User & OAuthAccount, and sync inbox."""
+    tokens = await GoogleOAuthService.exchange_code_for_tokens(code)
+    access_token = tokens["access_token"]
+    refresh_token = tokens.get("refresh_token")
+
+    user_info = await GoogleOAuthService.get_user_info(access_token)
+    email = user_info["email"]
+    name = user_info.get("name") or email.split("@")[0].capitalize()
+
+    stmt = select(User).where(User.email == email)
+    res = await db.execute(stmt)
+    user = res.scalars().first()
+
+    if not user:
+        user = User(
+            email=email,
+            full_name=name,
+            onboarding_completed_at=datetime.now(timezone.utc)
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+    oauth_stmt = select(OAuthAccount).where(
+        OAuthAccount.user_id == user.id,
+        OAuthAccount.provider == "google"
+    )
+    oauth_res = await db.execute(oauth_stmt)
+    oauth_acc = oauth_res.scalars().first()
+
+    enc_access = encrypt_token(access_token)
+    enc_refresh = encrypt_token(refresh_token) if refresh_token else (oauth_acc.encrypted_refresh_token if oauth_acc else None)
+
+    if not oauth_acc:
+        oauth_acc = OAuthAccount(
+            user_id=user.id,
+            provider="google",
+            provider_account_id=str(user_info.get("id") or user_info.get("sub") or email),
+            encrypted_access_token=enc_access,
+            encrypted_refresh_token=enc_refresh
+        )
+        db.add(oauth_acc)
+    else:
+        oauth_acc.encrypted_access_token = enc_access
+        if enc_refresh:
+            oauth_acc.encrypted_refresh_token = enc_refresh
+
+    await db.commit()
+
+    try:
+        await GmailSyncService.sync_user_inbox(db, user.id, access_token)
+    except Exception as sync_err:
+        logger.warning(f"[OAuthCallback] Inbox sync warning: {str(sync_err)}")
+
+    jwt_token = create_access_token(user.id)
+    return jwt_token, user
+
+
 @router.api_route("/demo", methods=["GET", "POST"])
 async def enter_demo_session(
     response: Response,
@@ -184,6 +244,10 @@ async def enter_demo_session(
         db.add(user)
         await db.commit()
         await db.refresh(user)
+
+    t_stmt = select(EmailThread).where(EmailThread.user_id == user.id)
+    t_res = await db.execute(t_stmt)
+    if not t_res.scalars().first():
         try:
             await _seed_demo_threads_for_user(db, user.id)
         except Exception as err:
@@ -232,6 +296,10 @@ async def get_current_user_me(
             db.add(user)
             await db.commit()
             await db.refresh(user)
+
+        t_stmt = select(EmailThread).where(EmailThread.user_id == user.id)
+        t_res = await db.execute(t_stmt)
+        if not t_res.scalars().first():
             try:
                 await _seed_demo_threads_for_user(db, user.id)
             except Exception as err:
@@ -247,6 +315,17 @@ async def get_current_user_me(
             samesite="lax"
         )
     else:
+        # For logged in user without OAuth account and 0 threads, seed demo threads
+        oauth_check = await db.execute(select(OAuthAccount).where(OAuthAccount.user_id == user.id))
+        if not oauth_check.scalars().first():
+            t_stmt = select(EmailThread).where(EmailThread.user_id == user.id)
+            t_res = await db.execute(t_stmt)
+            if not t_res.scalars().first():
+                try:
+                    await _seed_demo_threads_for_user(db, user.id)
+                except Exception as err:
+                    logger.warning(f"[AuthMe] Seeding error for user: {str(err)}")
+
         jwt_token = create_access_token(user.id)
 
     oauth_res = await db.execute(select(OAuthAccount).where(OAuthAccount.user_id == user.id, OAuthAccount.provider == "google"))
