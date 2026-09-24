@@ -34,6 +34,7 @@ import authApi from '../api/auth';
 import followupsApi from '../api/followups';
 import integrationsApi from '../api/integrations';
 import apiTokensApi from '../api/apiTokens';
+import { API_BASE } from '../api/client';
 
 import TeamPage from './TeamPage';
 import { useAuth } from '../context/AuthContext';
@@ -112,11 +113,16 @@ export default function SettingsPage() {
     }
   };
 
+  const getMcpEndpointUrl = () => {
+    const base = (API_BASE || '/api/v1').replace(/\/api\/v1\/?$/, '');
+    return base.startsWith('http') ? `${base}/mcp` : `${window.location.protocol}//${window.location.host}/mcp`;
+  };
+
   const handleTestMcp = async () => {
     setTestingMcp(true);
     setMcpTestResult(null);
     try {
-      const mcpUrl = `${window.location.protocol}//${window.location.hostname}:8000/mcp`;
+      const mcpUrl = getMcpEndpointUrl();
       const res = await fetch(mcpUrl);
       const data = await res.json();
       if (data && data.status === 'online') {
@@ -174,7 +180,7 @@ export default function SettingsPage() {
   };
 
   const handleCopyMcp = () => {
-    navigator.clipboard.writeText('http://localhost:8000/mcp');
+    navigator.clipboard.writeText(getMcpEndpointUrl());
     setCopiedMcp(true);
     setTimeout(() => setCopiedMcp(false), 2500);
   };
@@ -727,7 +733,7 @@ export default function SettingsPage() {
                     <label className="block text-[11px] font-bold text-[#8fa0b1] uppercase mb-1">MCP HTTP Endpoint</label>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 p-2.5 bg-[#FAF6F0] border border-[#E6DFD5] rounded-xl font-mono text-xs text-[#172033] font-bold truncate">
-                        {`${window.location.protocol}//${window.location.hostname}:8000/mcp`}
+                        {getMcpEndpointUrl()}
                       </div>
                       <button
                         onClick={handleCopyMcp}
