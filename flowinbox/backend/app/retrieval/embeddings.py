@@ -1,3 +1,5 @@
+import os
+import gc
 from abc import ABC, abstractmethod
 from typing import List
 
@@ -30,6 +32,13 @@ class FastEmbedProvider(EmbeddingProvider):
         self._dim = 384
 
     def _get_model(self):
+        # On 512MB RAM environments (like Render Free Tier), loading 350MB ONNX FastEmbed model causes OOM kills.
+        # Use lightweight fallback embeddings in low memory mode or production.
+        from app.core.config import settings
+        low_memory = os.environ.get("LOW_MEMORY_MODE", "true").lower() == "true"
+        if settings.ENVIRONMENT == "production" and low_memory:
+            return None
+
         if self._model is None:
             try:
                 from fastembed import TextEmbedding

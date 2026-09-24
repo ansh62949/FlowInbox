@@ -17,6 +17,8 @@ def _to_utc(dt):
     return dt.astimezone(timezone.utc)
 
 
+import gc
+
 class GmailSyncService:
     """Ingest synced emails from Gmail into PostgreSQL user-scoped tables."""
 
@@ -24,14 +26,14 @@ class GmailSyncService:
     async def sync_user_inbox(db: AsyncSession, user_id: uuid.UUID, access_token: str) -> int:
         client = GmailClient(access_token)
         
-        # Query across inbox categories (inbox, promotions, social, updates, sent, starred)
-        queries = ["in:inbox", "category:promotions", "category:social", "category:updates", "is:sent", "is:starred"]
+        # Streamlined query list with max_results=10 to keep RAM below 512MB limit on Render
+        queries = ["in:inbox", "category:promotions", "is:sent"]
         all_messages = []
         seen_ids = set()
 
         for q in queries:
             try:
-                msgs = await client.fetch_messages(max_results=30, query=q)
+                msgs = await client.fetch_messages(max_results=10, query=q)
                 for m in msgs:
                     if m["gmail_id"] not in seen_ids:
                         seen_ids.add(m["gmail_id"])

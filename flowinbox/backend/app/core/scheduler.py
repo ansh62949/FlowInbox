@@ -14,7 +14,7 @@ _scheduler_task: asyncio.Task = None
 _scheduler_running: bool = False
 
 
-async def _gmail_sync_loop(interval_seconds: int = 45):
+async def _gmail_sync_loop(interval_seconds: int = 90):
     """Background task loop that periodically syncs Gmail for all connected OAuth users."""
     global _scheduler_running
     logger.info(f"[GmailScheduler] Background Gmail sync loop started (Interval: {interval_seconds}s)")
@@ -54,7 +54,7 @@ def start_scheduler():
 
     if not _scheduler_running:
         _scheduler_running = True
-        _scheduler_task = asyncio.create_task(_gmail_sync_loop(interval_seconds=45))
+        _scheduler_task = asyncio.create_task(_gmail_sync_loop(interval_seconds=90))
         logger.info("[GmailScheduler] Background scheduler initialized.")
 
 
