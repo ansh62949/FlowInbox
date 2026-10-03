@@ -4,12 +4,16 @@ from httpx import AsyncClient
 
 @pytest.mark.asyncio
 async def test_root_endpoint(async_client: AsyncClient):
-    """Test root endpoint returns welcome message."""
+    """Test root endpoint returns welcome message or SPA HTML index."""
     response = await async_client.get("/")
     assert response.status_code == 200
-    data = response.json()
-    assert "message" in data
-    assert data["message"] == "Welcome to FlowInbox AI API"
+    content_type = response.headers.get("content-type", "")
+    if "application/json" in content_type:
+        data = response.json()
+        assert "message" in data
+    else:
+        assert "<html" in response.text.lower()
+
 
 
 @pytest.mark.asyncio

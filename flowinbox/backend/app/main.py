@@ -68,11 +68,49 @@ app.include_router(mcp_server_router)
 
 
 
-@app.get("/")
-async def root():
-    return {
-        "message": "Welcome to FlowInbox AI API",
-        "docs": "/docs",
-        "health": f"{settings.API_V1_STR}/health"
-    }
+import os
+from fastapi import HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+# Serve built frontend static files if static or frontend/dist directory exists
+possible_static_paths = [
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static")),
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")),
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "frontend", "dist"))
+]
+
+static_dir = None
+for p in possible_static_paths:
+    if os.path.exists(p) and os.path.exists(os.path.join(p, "index.html")):
+        static_dir = p
+        break
+
+if static_dir:
+    assets_dir = os.path.join(static_dir, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi.json") or full_path.startswith("mcp"):
+            raise HTTPException(status_code=404, detail="API route not found")
+        
+        target_file = os.path.join(static_dir, full_path)
+        if full_path and os.path.isfile(target_file):
+            return FileResponse(target_file)
+        
+        index_file = os.path.join(static_dir, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        raise HTTPException(status_code=404, detail="Index file not found")
+else:
+    @app.get("/")
+    async def root():
+        return {
+            "message": "Welcome to FlowInbox AI API",
+            "docs": "/docs",
+            "health": f"{settings.API_V1_STR}/health"
+        }
+
 
