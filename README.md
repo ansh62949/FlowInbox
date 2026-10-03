@@ -5,7 +5,9 @@
 
 > **FlowInbox AI** is an AI-native workspace where people, teams, and autonomous AI agents collaborate together on email communications, thread triage, calendar scheduling, and workflow automation.
 
-🌐 **Live Application:** [https://flow-inbox.vercel.app](https://flow-inbox.vercel.app)  
+🌐 **Live Full-Stack Service (Render):** [https://flowinbox-f93i.onrender.com](https://flowinbox-f93i.onrender.com)  
+⚡ **Decoupled Frontend (Vercel):** [https://flow-inbox.vercel.app](https://flow-inbox.vercel.app)  
+📖 **Deployment Guide:** See [Production Deployment Guide (Render & Vercel)](docs/DEPLOYMENT.md)  
 ⚡ **Evaluator Quick Access:** Click **"Enter Demo Workspace"** on the sign-in page for instant 1-click access with pre-populated demo threads—zero setup or personal Gmail login required!
 
 ---
