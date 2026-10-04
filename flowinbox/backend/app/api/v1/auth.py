@@ -82,10 +82,13 @@ async def google_auth_status(
 
 
 async def _seed_demo_threads_for_user(db: AsyncSession, user_id: uuid.UUID):
-    """Seed clean, realistic demo threads for Guest Evaluator sessions."""
-    from app.models.email import EmailThread, Email
+    """Seed clean, rich, realistic demo threads, contacts, tasks, calendar events, approvals, and channels for Guest Evaluator sessions."""
+    from app.models.email import EmailThread, Email, Contact, Task, CalendarEvent, Followup, Draft
+    from app.models.approval import Approval
+    from app.models.channels import Channel, ChannelMessage
     now = datetime.now(timezone.utc)
 
+    # 1. Seed Demo Email Threads & Emails
     demo_data = [
         {
             "subject": "Senior AI Engineer Role - Interview Schedule Confirmation",
@@ -93,9 +96,12 @@ async def _seed_demo_threads_for_user(db: AsyncSession, user_id: uuid.UUID):
             "category": "primary",
             "importance": "high",
             "needs_reply": True,
-            "sender": "Recruiting Team",
-            "sender_email": "recruiting@techcorp.com",
-            "body": "Hi there,\n\nWe are excited to move forward with your application for the Senior AI Engineer position. Your 45-minute technical interview is scheduled for tomorrow at 2:00 PM EST via Google Meet.\n\nPlease confirm if this time works for you.\n\nBest,\nRecruiting Team @ TechCorp"
+            "folder": "inbox",
+            "is_starred": True,
+            "is_read": False,
+            "sender": "Rahul Sharma (Google Recruiter)",
+            "sender_email": "rahul.recruiter@google.com",
+            "body": "Hi there,\n\nWe are excited to move forward with your application for the Senior AI Engineer position. Your 45-minute technical interview is scheduled for tomorrow at 2:00 PM EST via Google Meet.\n\nPlease confirm if this time works for you.\n\nBest,\nRahul Sharma\nSenior Technical Recruiter @ Google"
         },
         {
             "subject": "Q3 Product Strategy & Key Action Items",
@@ -103,19 +109,51 @@ async def _seed_demo_threads_for_user(db: AsyncSession, user_id: uuid.UUID):
             "category": "primary",
             "importance": "normal",
             "needs_reply": False,
+            "folder": "inbox",
+            "is_starred": False,
+            "is_read": True,
             "sender": "Sarah Chen",
             "sender_email": "sarah@flowinbox.ai",
-            "body": "Team,\n\nThanks for a productive Q3 roadmap planning session. As discussed, our top priorities for Sprint 12 are:\n1. Launching real-time MCP server integrations.\n2. Optimizing vector embedding retrieval pipelines.\n3. Multi-tenant security hardening.\n\nLet me know if you have any questions.\n\nBest,\nSarah"
+            "body": "Team,\n\nThanks for a productive Q3 roadmap planning session. As discussed, our top priorities for Sprint 12 are:\n1. Launching real-time MCP server integrations.\n2. Optimizing vector embedding retrieval pipelines.\n3. Multi-tenant security hardening.\n\nLet me know if you have any questions.\n\nBest,\nSarah Chen\nVP of Engineering @ FlowInbox AI"
         },
         {
             "subject": "Question regarding API Rate Limits & Documentation",
             "snippet": "Hi team, we noticed 429 rate limits when fetching email threads in bulk. Could you clarify default limits?",
             "category": "needs-reply",
-            "importance": "high",
+            "importance": "urgent",
             "needs_reply": True,
+            "folder": "inbox",
+            "is_starred": False,
+            "is_read": False,
             "sender": "Alex Mercer",
             "sender_email": "alex.dev@cloudprovider.com",
-            "body": "Hello Support Team,\n\nWe are integrating our enterprise workflow with FlowInbox API and encountered HTTP 429 Rate Exceeded errors during batch thread sync. Could you provide guidance on adjusting rate limits or documentation on recommended retry strategies?\n\nThanks,\nAlex Mercer"
+            "body": "Hello Support Team,\n\nWe are integrating our enterprise workflow with FlowInbox API and encountered HTTP 429 Rate Exceeded errors during batch thread sync. Could you provide guidance on adjusting rate limits or documentation on recommended retry strategies?\n\nThanks,\nAlex Mercer\nLead Developer @ CloudProvider"
+        },
+        {
+            "subject": "AWS Cloud Invoice #847291 - $1,240.00 Payment Confirmation",
+            "snippet": "Your AWS payment of $1,240.00 for billing cycle August 2026 has been processed successfully.",
+            "category": "updates",
+            "importance": "normal",
+            "needs_reply": False,
+            "folder": "inbox",
+            "is_starred": False,
+            "is_read": True,
+            "sender": "Amazon Web Services",
+            "sender_email": "no-reply-aws@amazon.com",
+            "body": "Dear Customer,\n\nThis is a confirmation that your payment of $1,240.00 USD for AWS Account #847291 has been successfully processed.\n\nSummary of Charges:\n- Amazon EC2 Compute: $780.00\n- Qdrant Vector Store Clusters: $310.00\n- Amazon RDS PostgreSQL: $150.00\n\nThank you for choosing AWS."
+        },
+        {
+            "subject": "Meeting Request: Architecture Review with Engineering Lead",
+            "snippet": "Can we schedule a 30-minute sync tomorrow to review the vector database indexing benchmark?",
+            "category": "primary",
+            "importance": "high",
+            "needs_reply": True,
+            "folder": "inbox",
+            "is_starred": True,
+            "is_read": True,
+            "sender": "Priya Patel",
+            "sender_email": "priya.hr@techcorp.com",
+            "body": "Hi,\n\nFollowing up on our performance discussion, I'd like to schedule a 30-minute architecture review tomorrow afternoon to finalize the Qdrant hybrid RAG retrieval spec.\n\nProposed times:\n- 4:00 PM EST\n- 4:30 PM EST\n\nPlease let me know which time suits your schedule best.\n\nBest regards,\nPriya Patel"
         },
         {
             "subject": "Weekly Tech & AI Engineering Newsletter #42",
@@ -123,12 +161,16 @@ async def _seed_demo_threads_for_user(db: AsyncSession, user_id: uuid.UUID):
             "category": "promotions",
             "importance": "low",
             "needs_reply": False,
+            "folder": "inbox",
+            "is_starred": False,
+            "is_read": True,
             "sender": "AI Weekly",
             "sender_email": "newsletter@techdigest.io",
             "body": "Welcome to AI Weekly Digest!\n\nHighlights of the week:\n- Breakthroughs in agentic state machine design\n- Fast local vector stores with ONNX runtimes\n- Open-source MCP tool standardizations\n\nRead full issue online."
         }
     ]
 
+    created_threads = []
     for idx, d in enumerate(demo_data):
         t_id = uuid.uuid4()
         thread = EmailThread(
@@ -137,17 +179,18 @@ async def _seed_demo_threads_for_user(db: AsyncSession, user_id: uuid.UUID):
             gmail_thread_id=f"demo_thread_{idx+1}",
             subject=d["subject"],
             snippet=d["snippet"],
-            last_message_at=now - timedelta(hours=idx * 3 + 1),
+            last_message_at=now - timedelta(hours=idx * 2 + 1),
             category=d["category"],
             importance=d["importance"],
-            folder="inbox",
-            is_starred=(idx == 0),
-            is_read=(idx != 0),
+            folder=d["folder"],
+            is_starred=d["is_starred"],
+            is_read=d["is_read"],
             needs_reply=d["needs_reply"],
             has_unanswered_followup=(idx == 2)
         )
         db.add(thread)
         await db.flush()
+        created_threads.append(thread)
 
         email_msg = Email(
             id=uuid.uuid4(),
@@ -159,10 +202,133 @@ async def _seed_demo_threads_for_user(db: AsyncSession, user_id: uuid.UUID):
             recipients="guest@flowinbox.ai",
             subject=d["subject"],
             body_text=d["body"],
-            sent_at=now - timedelta(hours=idx * 3 + 1),
+            sent_at=now - timedelta(hours=idx * 2 + 1),
             is_incoming=True
         )
         db.add(email_msg)
+
+    # 2. Seed Contacts
+    contacts_data = [
+        {"name": "Rahul Sharma", "email": "rahul.recruiter@google.com", "role": "Senior Recruiter", "company": "Google"},
+        {"name": "Sarah Chen", "email": "sarah@flowinbox.ai", "role": "VP of Engineering", "company": "FlowInbox AI"},
+        {"name": "Alex Mercer", "email": "alex.dev@cloudprovider.com", "role": "Lead Developer", "company": "CloudProvider"},
+        {"name": "Priya Patel", "email": "priya.hr@techcorp.com", "role": "Engineering Lead", "company": "TechCorp"}
+    ]
+    for c in contacts_data:
+        db.add(Contact(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            email_address=c["email"],
+            name=c["name"],
+            role=c["role"],
+            company=c["company"],
+            notes=f"Key contact for {c['company']}"
+        ))
+
+    # 3. Seed Tasks
+    tasks_data = [
+        {"title": "Confirm Google Technical Interview Time", "desc": "Reply to Rahul Sharma regarding tomorrow's 2:00 PM EST interview", "due": now + timedelta(days=1), "completed": False},
+        {"title": "Review Q3 Security Audit & Vector Indexing", "desc": "Check Qdrant hybrid RAG retrieval benchmarks and rate limit specs", "due": now + timedelta(days=2), "completed": False},
+        {"title": "Prepare Slide Deck for Architecture Review", "desc": "Finalize 5-slide deck on LangGraph state graph routing", "due": now - timedelta(days=1), "completed": True}
+    ]
+    for t in tasks_data:
+        db.add(Task(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            thread_id=created_threads[0].id,
+            title=t["title"],
+            description=t["desc"],
+            due_date=t["due"],
+            is_completed=t["completed"]
+        ))
+
+    # 4. Seed Calendar Events
+    cal_events = [
+        {
+            "google_event_id": "demo_cal_1",
+            "title": "Google Technical Interview (Senior AI Engineer)",
+            "desc": "45-minute technical interview via Google Meet",
+            "start": now + timedelta(days=1, hours=2),
+            "end": now + timedelta(days=1, hours=2, minutes=45),
+            "attendees": [{"email": "rahul.recruiter@google.com"}, {"email": "guest@flowinbox.ai"}]
+        },
+        {
+            "google_event_id": "demo_cal_2",
+            "title": "Architecture Review with Engineering Lead",
+            "desc": "Review Qdrant hybrid RAG indexing spec",
+            "start": now + timedelta(days=1, hours=4),
+            "end": now + timedelta(days=1, hours=5),
+            "attendees": [{"email": "priya.hr@techcorp.com"}, {"email": "guest@flowinbox.ai"}]
+        }
+    ]
+    for ce in cal_events:
+        db.add(CalendarEvent(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            google_event_id=ce["google_event_id"],
+            title=ce["title"],
+            description=ce["desc"],
+            start_time=ce["start"],
+            end_time=ce["end"],
+            attendees=ce["attendees"]
+        ))
+
+    # 5. Seed Pending Approval Gate Item
+    db.add(Approval(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        thread_id=created_threads[0].id,
+        action_type="send_email",
+        payload={
+            "to_email": "rahul.recruiter@google.com",
+            "subject": "Re: Senior AI Engineer Role - Interview Schedule Confirmation",
+            "body": "Hi Rahul,\n\nThank you for the update! I confirm that tomorrow at 2:00 PM EST works great for the technical interview. I look forward to speaking with the team.\n\nBest regards,\nGuest Evaluator"
+        },
+        reason="Send email reply confirming 2:00 PM EST technical interview availability",
+        status="pending",
+        created_at=now - timedelta(minutes=15)
+    ))
+
+    # 6. Seed Demo Channels & Messages
+    ch_gen = Channel(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        name="general",
+        icon="hash",
+        created_at=now - timedelta(days=2)
+    )
+    ch_eng = Channel(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        name="engineering",
+        icon="code",
+        created_at=now - timedelta(days=2)
+    )
+    db.add(ch_gen)
+    db.add(ch_eng)
+    await db.flush()
+
+    db.add(ChannelMessage(
+        id=uuid.uuid4(),
+        channel_id=ch_gen.id,
+        user_id=user_id,
+        sender_name="Sarah Chen",
+        sender_type="human",
+        title="Welcome to FlowInbox AI Demo Workspace!",
+        body="Welcome to the FlowInbox AI demo workspace! Feel free to test AI thread synthesis, writing style analysis, team channels, and human-in-the-loop safety approvals.",
+        created_at=now - timedelta(hours=5)
+    ))
+
+    db.add(ChannelMessage(
+        id=uuid.uuid4(),
+        channel_id=ch_eng.id,
+        user_id=user_id,
+        sender_name="AI FlowInbox Assistant",
+        sender_type="agent",
+        title="Vector Index Status Update",
+        body="Vector search index for Qdrant initialized with 1,240 document chunks. Dense + sparse hybrid search enabled with Reciprocal Rank Fusion (RRF).",
+        created_at=now - timedelta(hours=2)
+    ))
 
     await db.commit()
 

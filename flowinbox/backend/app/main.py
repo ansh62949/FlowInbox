@@ -68,6 +68,29 @@ app.include_router(mcp_server_router)
 
 
 
+from sqlalchemy import text
+from app.db.session import get_db
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["Health"])
+async def root_health_check(db: AsyncSession = Depends(get_db)):
+    """Root health check endpoint for UptimeRobot and Render uptime monitoring."""
+    db_status = "ok"
+    try:
+        await db.execute(text("SELECT 1"))
+    except Exception as e:
+        db_status = f"unhealthy: {str(e)}"
+
+    return {
+        "status": "healthy" if db_status == "ok" else "degraded",
+        "project": settings.PROJECT_NAME,
+        "environment": settings.ENVIRONMENT,
+        "database": db_status
+    }
+
+
 import os
 from fastapi import HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -91,9 +114,9 @@ if static_dir:
     if os.path.exists(assets_dir):
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
-    @app.get("/{full_path:path}")
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
     async def serve_spa(full_path: str):
-        if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi.json") or full_path.startswith("mcp"):
+        if full_path.startswith("api/") or full_path == "health" or full_path.startswith("health") or full_path.startswith("docs") or full_path.startswith("openapi.json") or full_path.startswith("mcp"):
             raise HTTPException(status_code=404, detail="API route not found")
         
         target_file = os.path.join(static_dir, full_path)
@@ -112,5 +135,6 @@ else:
             "docs": "/docs",
             "health": f"{settings.API_V1_STR}/health"
         }
+
 
 
